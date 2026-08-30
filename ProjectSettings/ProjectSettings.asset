@@ -165,6 +165,7 @@ PlayerSettings:
   applicationIdentifier:
     Android: com.cuerzor.minecraftVSZombies2
     Standalone: com.cuerzor.minecraftVSZombies2
+    iPhone: com.cuerzor.minecraftVSZombies2
   buildNumber:
     Standalone: 0
     VisionOS: 0
