@@ -89,7 +89,7 @@ namespace MVZ2.Inputs
         private void PollTouchPointerEvents()
         {
             int touchCount = Input.touchCount;
-            var seenTouchIds = new HashSet<int>();
+            seenTouchIds.Clear();
 
             for (int i = 0; i < touchCount; i++)
             {
@@ -220,6 +220,7 @@ namespace MVZ2.Inputs
         private Vector2 lastMousePosition;
         private bool mousePositionInitialized;
         private readonly Dictionary<int, Vector2> lastTouchPositions = new Dictionary<int, Vector2>();
+        private readonly HashSet<int> seenTouchIds = new HashSet<int>();
         private readonly List<int> staleTouchIds = new List<int>();
         private readonly List<PointerEventCacheData> pointerEventCacheList = new List<PointerEventCacheData>();
     }
