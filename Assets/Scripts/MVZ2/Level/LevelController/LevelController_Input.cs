@@ -39,19 +39,16 @@ namespace MVZ2.Level
         #region 指针输入
         private void UpdatePointerRelease()
         {
-            if (Input.touchCount > 0)
+            // Touch and mouse/trackpad can coexist on iPad. Poll both release
+            // paths every frame so a finger on screen cannot swallow a trackpad
+            // release (and vice versa), which otherwise leaves held items stuck.
+            foreach (var position in InputHelper.GetTouchUps())
             {
-                foreach (var position in InputHelper.GetTouchUps())
-                {
-                    OnPointerRelease(position);
-                }
+                OnPointerRelease(position);
             }
-            else
+            foreach (var position in InputHelper.GetMouseUps(MouseButtons.LEFT))
             {
-                foreach (var position in InputHelper.GetMouseUps(MouseButtons.LEFT))
-                {
-                    OnPointerRelease(position);
-                }
+                OnPointerRelease(position);
             }
         }
         private void OnPointerRelease(PointerPositionParams pointer)
