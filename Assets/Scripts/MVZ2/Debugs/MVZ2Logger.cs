@@ -79,12 +79,19 @@ namespace MVZ2.Debugs
                 throw new DuplicateInstanceException(name);
             }
         }
-#if UNITY_ANDROID
+#if UNITY_ANDROID || UNITY_IOS
         private void OnApplicationFocus(bool focus)
         {
-            // 安卓失去焦点后，关闭文件流。
-            // 因为安卓切换到其他应用时，可能会在后台被系统施放，而不调用OnApplicationQuit.
+            // Mobile OSes may suspend the process without a normal quit callback.
             if (!focus)
+            {
+                CloseLogWriter();
+            }
+        }
+
+        private void OnApplicationPause(bool pause)
+        {
+            if (pause)
             {
                 CloseLogWriter();
             }
