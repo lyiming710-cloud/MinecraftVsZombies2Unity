@@ -2,6 +2,14 @@ name: Build unsigned iOS IPA
 
 on:
   workflow_dispatch:
+  push:
+    branches:
+      - ios-ipad-port
+    paths:
+      - "Assets/**"
+      - "Packages/**"
+      - "ProjectSettings/**"
+      - ".github/workflows/ios-unsigned.yml"
 
 permissions:
   contents: read
@@ -63,6 +71,20 @@ jobs:
           allowDirtyBuild: true
           cacheUnityInstallationOnMac: true
 
+      - name: Print Unity errors
+        if: failure()
+        shell: bash
+        run: |
+          LOG="$HOME/Library/Logs/Unity/Editor.log"
+          if [[ -f "$LOG" ]]; then
+            echo "===== Filtered Unity errors ====="
+            grep -nEi 'error CS[0-9]+|Build failed|Compilation failed|Exception|IL2CPP|Addressables|error:' "$LOG" | tail -500 || true
+            echo "===== Unity Editor.log tail ====="
+            tail -1200 "$LOG" || true
+          else
+            echo "Unity Editor.log not found at $LOG"
+          fi
+
       - name: Locate Xcode project
         id: xcode
         shell: bash
@@ -119,7 +141,7 @@ jobs:
           if-no-files-found: error
           compression-level: 0
 
-      - name: Upload Xcode build log inputs on failure
+      - name: Upload build debug data on failure
         if: failure()
         uses: actions/upload-artifact@v4
         with:
@@ -128,4 +150,4 @@ jobs:
             build
             ~/Library/Logs/Unity/Editor.log
           if-no-files-found: ignore
-          retention-days: 7
+          retention-days: 30
