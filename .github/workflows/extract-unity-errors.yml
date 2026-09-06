@@ -6,7 +6,7 @@ on:
       job_id:
         description: GitHub Actions job ID whose log should be inspected
         required: false
-        default: "101515002224"
+        default: "101526764250"
   push:
     branches:
       - ios-ipad-port
@@ -29,7 +29,7 @@ jobs:
           INPUT_JOB_ID: ${{ github.event.inputs.job_id }}
         run: |
           set -euo pipefail
-          JOB_ID="${INPUT_JOB_ID:-101515002224}"
+          JOB_ID="${INPUT_JOB_ID:-101526764250}"
           LOG="$RUNNER_TEMP/unity-job.log"
           curl -L --fail --silent --show-error \
             -H "Accept: application/vnd.github+json" \
@@ -56,4 +56,4 @@ jobs:
           for i,l in enumerate(lines[-140:], start=max(1,len(lines)-139)):
               print(f"{i}: {l}")
           PY
-# snapshot: xcode-live-2
+# snapshot: encoding-fix-live
