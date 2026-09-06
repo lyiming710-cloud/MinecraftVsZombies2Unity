@@ -81,29 +81,50 @@ jobs:
         shell: bash
         run: |
           set -u
-          LOG="$HOME/Library/Logs/Unity/Editor.log"
           OUT="$RUNNER_TEMP/unity-error-summary.txt"
-          if [[ -f "$LOG" ]]; then
-            {
-              echo "===== Filtered Unity fatal/error lines ====="
-              grep -nEi 'error CS[0-9]+|BuildFailedException|Build failed|Compilation failed|Scripts have compiler errors|Player build failed|Error building Player|Exception:|IL2CPP|Addressables|error:' "$LOG" | tail -180 || true
-              echo
-              echo "===== Last 220 lines of Unity Editor.log ====="
-              tail -220 "$LOG" || true
-            } > "$OUT"
-          else
-            printf '%s\n' "Unity Editor.log not found at $LOG" > "$OUT"
-          fi
+          : > "$OUT"
 
-          # Keep the job output small enough that the connector can retrieve it reliably.
+          {
+            echo "===== game-ci / Unity log files found ====="
+            for candidate in \
+              "$GITHUB_WORKSPACE/out.log" \
+              "$HOME/.game-ci/game-ci.log" \
+              "$HOME/Library/Logs/Unity/Editor.log"; do
+              if [[ -f "$candidate" ]]; then
+                printf '%s (%s bytes)\n' "$candidate" "$(wc -c < "$candidate" | tr -d ' ')"
+              fi
+            done
+            find "$GITHUB_WORKSPACE" "$RUNNER_TEMP" -maxdepth 5 -type f \( -name 'out.log' -o -name 'Editor.log' -o -name '*unity*.log' -o -name 'game-ci.log' \) -print 2>/dev/null | sort -u || true
+
+            echo
+            echo "===== Project out.log errors ====="
+            if [[ -f "$GITHUB_WORKSPACE/out.log" ]]; then
+              grep -nEi 'error CS[0-9]+|BuildFailedException|Build failed|Compilation failed|Scripts have compiler errors|Player build failed|Error building Player|Exception:|IL2CPP|Addressables|error:' "$GITHUB_WORKSPACE/out.log" | tail -220 || true
+              echo "----- out.log tail -----"
+              tail -260 "$GITHUB_WORKSPACE/out.log" || true
+            else
+              echo "No $GITHUB_WORKSPACE/out.log"
+            fi
+
+            echo
+            echo "===== game-ci log errors ====="
+            if [[ -f "$HOME/.game-ci/game-ci.log" ]]; then
+              grep -nEi 'error|fail|exception|exit code' "$HOME/.game-ci/game-ci.log" | tail -160 || true
+              echo "----- game-ci.log tail -----"
+              tail -180 "$HOME/.game-ci/game-ci.log" || true
+            else
+              echo "No $HOME/.game-ci/game-ci.log"
+            fi
+          } > "$OUT"
+
           python3 - "$OUT" "$GITHUB_OUTPUT" <<'PY'
           from pathlib import Path
           import sys, uuid
           src = Path(sys.argv[1])
           dst = Path(sys.argv[2])
           text = src.read_text(encoding="utf-8", errors="replace")
-          if len(text) > 24000:
-              text = "[truncated to last 24000 chars]\n" + text[-24000:]
+          if len(text) > 30000:
+              text = "[truncated to last 30000 chars]\n" + text[-30000:]
           marker = "UNITYERR_" + uuid.uuid4().hex
           with dst.open("a", encoding="utf-8") as f:
               f.write(f"summary<<{marker}\n{text}\n{marker}\n")
@@ -177,6 +198,8 @@ jobs:
           name: ios-build-debug
           path: |
             build
+            out.log
+            ~/.game-ci/game-ci.log
             ~/Library/Logs/Unity/Editor.log
           if-no-files-found: ignore
           retention-days: 30
