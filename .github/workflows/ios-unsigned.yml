@@ -33,7 +33,7 @@ jobs:
           submodules: recursive
           fetch-depth: 0
 
-      - name: Normalize TalkConverter full-width char literals
+      - name: Normalize TalkConverter source encoding
         shell: bash
         run: |
           set -euo pipefail
@@ -41,7 +41,14 @@ jobs:
           from pathlib import Path
 
           path = Path("Assets/Scripts/Editor/Menus/TalkConverter.cs")
-          text = path.read_text(encoding="utf-8")
+          raw = path.read_bytes()
+          try:
+              text = raw.decode("utf-8")
+              source_encoding = "utf-8"
+          except UnicodeDecodeError:
+              text = raw.decode("gb18030")
+              source_encoding = "gb18030"
+
           replacements = {
               "'【'": r"'\u3010'",
               "'】'": r"'\u3011'",
@@ -53,18 +60,22 @@ jobs:
           for old, new in replacements.items():
               counts[old] = text.count(old)
               text = text.replace(old, new)
-          path.write_text(text, encoding="utf-8", newline="\n")
-
-          print("Normalized full-width char literals:")
-          for old, count in counts.items():
-              print(f"  {old}: {count}")
 
           expected = {"'【'": 1, "'】'": 1, "'（'": 2, "'）'": 2, "'：'": 1}
           if counts != expected:
               raise SystemExit(f"Unexpected TalkConverter literal counts: {counts!r}")
-          PY
 
-          grep -n "\\\\u3010\|\\\\u3011\|\\\\uFF08\|\\\\uFF09\|\\\\uFF1A" Assets/Scripts/Editor/Menus/TalkConverter.cs
+          # UTF-8 with BOM makes Roslyn's source encoding explicit on macOS.
+          path.write_text(text, encoding="utf-8-sig", newline="\n")
+
+          verify = path.read_text(encoding="utf-8-sig")
+          escapes = (r"'\u3010'", r"'\u3011'", r"'\uFF08'", r"'\uFF09'", r"'\uFF1A'")
+          if not all(item in verify for item in escapes):
+              raise SystemExit("Unicode escape verification failed")
+
+          print(f"TalkConverter transcoded from {source_encoding} to utf-8-sig")
+          print(f"Replaced literal counts: {counts}")
+          PY
 
       - name: Verify Unity activation secrets
         shell: bash
