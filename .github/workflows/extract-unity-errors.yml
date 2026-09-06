@@ -1,0 +1,91 @@
+name: Extract Unity job errors
+
+on:
+  workflow_dispatch:
+    inputs:
+      job_id:
+        description: GitHub Actions job ID whose log should be inspected
+        required: false
+        default: "101510951479"
+  push:
+    branches:
+      - ios-ipad-port
+    paths:
+      - ".github/workflows/extract-unity-errors.yml"
+
+permissions:
+  actions: read
+  contents: read
+
+jobs:
+  extract:
+    name: Extract Unity error context
+    runs-on: ubuntu-latest
+    steps:
+      - name: Download and filter completed job log
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+          INPUT_JOB_ID: ${{ github.event.inputs.job_id }}
+        run: |
+          set -euo pipefail
+          JOB_ID="${INPUT_JOB_ID:-101510951479}"
+          LOG="$RUNNER_TEMP/unity-job.log"
+
+          curl -L --fail --silent --show-error \
+            -H "Accept: application/vnd.github+json" \
+            -H "Authorization: Bearer $GH_TOKEN" \
+            -H "X-GitHub-Api-Version: 2022-11-28" \
+            "https://api.github.com/repos/$GITHUB_REPOSITORY/actions/jobs/$JOB_ID/logs" \
+            -o "$LOG"
+
+          echo "Downloaded $(wc -c < "$LOG" | tr -d ' ') bytes from job $JOB_ID"
+
+          python3 - "$LOG" <<'PY'
+          from pathlib import Path
+          import re, sys
+
+          path = Path(sys.argv[1])
+          text = path.read_text(encoding="utf-8-sig", errors="replace")
+          # Strip ANSI escape sequences so pattern matching and output stay compact.
+          text = re.sub(r"\x1b\[[0-9;]*[A-Za-z]", "", text)
+          lines = text.splitlines()
+
+          patterns = re.compile(
+              r"##\[error\]|error CS\d+|BuildFailedException|Compilation failed|"
+              r"Scripts have compiler errors|Player build failed|Error building Player|"
+              r"Addressable|Addressables|IL2CPP|Unhandled exception|Exception:|"
+              r"Build failed, with exit code|FAILURE|\berror:\s",
+              re.IGNORECASE,
+          )
+
+          matches = [i for i, line in enumerate(lines) if patterns.search(line)]
+          windows = []
+          for i in matches:
+              start = max(0, i - 7)
+              end = min(len(lines), i + 11)
+              if windows and start <= windows[-1][1] + 2:
+                  windows[-1] = (windows[-1][0], max(windows[-1][1], end))
+              else:
+                  windows.append((start, end))
+
+          print("===== Unity/action error contexts =====")
+          emitted = 0
+          for start, end in windows:
+              for idx in range(start, end):
+                  print(f"{idx + 1}: {lines[idx]}")
+                  emitted += 1
+                  if emitted >= 420:
+                      print("[error context truncated at 420 lines]")
+                      break
+              if emitted >= 420:
+                  break
+              print("---")
+
+          if not matches:
+              print("No configured error pattern matched.")
+
+          print("===== Final 180 log lines =====")
+          for idx, line in enumerate(lines[-180:], start=max(1, len(lines) - 179)):
+              print(f"{idx}: {line}")
+          PY
