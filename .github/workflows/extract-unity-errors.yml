@@ -6,7 +6,7 @@ on:
       job_id:
         description: GitHub Actions job ID whose log should be inspected
         required: false
-        default: "101510951479"
+        default: "101515002224"
   push:
     branches:
       - ios-ipad-port
@@ -29,7 +29,7 @@ jobs:
           INPUT_JOB_ID: ${{ github.event.inputs.job_id }}
         run: |
           set -euo pipefail
-          JOB_ID="${INPUT_JOB_ID:-101510951479}"
+          JOB_ID="${INPUT_JOB_ID:-101515002224}"
           LOG="$RUNNER_TEMP/unity-job.log"
 
           curl -L --fail --silent --show-error \
@@ -50,7 +50,6 @@ jobs:
           text = re.sub(r"\x1b\[[0-9;]*[A-Za-z]", "", text)
           lines = text.splitlines()
 
-          # Find the game-ci failure banner generated after Unity has already exited.
           failure_idx = None
           for i, line in enumerate(lines):
               if "#         Failure         #" in line:
@@ -59,7 +58,6 @@ jobs:
           if failure_idx is None:
               failure_idx = len(lines)
 
-          # Only inspect the Unity/action output before the wrapper starts its failure banner.
           pre = lines[:failure_idx]
 
           strong = re.compile(
@@ -99,9 +97,7 @@ jobs:
           if not selected:
               print("No strong fatal pattern matched.")
 
-          # Also show only the last 220 lines immediately before the failure banner.
-          # This catches failures whose wording does not contain one of the patterns above.
-          print("===== Last 220 lines immediately before game-ci Failure banner =====")
+          print("===== Last 220 lines before current log end/failure banner =====")
           start = max(0, failure_idx - 220)
           for idx in range(start, failure_idx):
               print(f"{idx + 1}: {lines[idx]}")
