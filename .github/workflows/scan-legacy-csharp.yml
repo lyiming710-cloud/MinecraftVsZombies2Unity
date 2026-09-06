@@ -1,0 +1,72 @@
+name: Scan legacy CSharp encodings
+
+on:
+  workflow_dispatch:
+  push:
+    branches:
+      - ios-ipad-port
+    paths:
+      - ".github/workflows/scan-legacy-csharp.yml"
+
+permissions:
+  contents: read
+
+jobs:
+  scan:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v5
+        with:
+          submodules: recursive
+          lfs: false
+          fetch-depth: 1
+
+      - name: Scan CSharp source encodings
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 - <<'PY'
+          from pathlib import Path
+
+          legacy = []
+          unknown = []
+          total = 0
+          replacement_risk = []
+
+          for path in sorted(Path('Assets').rglob('*.cs')):
+              if not path.is_file():
+                  continue
+              total += 1
+              raw = path.read_bytes()
+              try:
+                  text = raw.decode('utf-8-sig')
+                  enc = 'utf-8'
+              except UnicodeDecodeError as utf8_error:
+                  try:
+                      text = raw.decode('gb18030')
+                      enc = 'gb18030'
+                  except UnicodeDecodeError as gb_error:
+                      unknown.append((str(path), str(utf8_error), str(gb_error)))
+                      continue
+                  legacy.append((str(path), len(raw), text.count('\ufffd')))
+
+              if '\ufffd' in text:
+                  replacement_risk.append((str(path), text.count('\ufffd'), enc))
+
+          print(f'TOTAL_CS={total}')
+          print(f'LEGACY_GB18030_COUNT={len(legacy)}')
+          for path, size, fffd in legacy:
+              print(f'LEGACY_GB18030\t{path}\tbytes={size}\tdecoded_fffd={fffd}')
+
+          print(f'UNKNOWN_ENCODING_COUNT={len(unknown)}')
+          for item in unknown:
+              print('UNKNOWN_ENCODING\t' + '\t'.join(item))
+
+          print(f'ALREADY_CONTAINS_UFFFD_COUNT={len(replacement_risk)}')
+          for path, count, enc in replacement_risk:
+              print(f'CONTAINS_UFFFD\t{path}\tcount={count}\tdecoded_as={enc}')
+
+          if unknown:
+              raise SystemExit('Found C# files that are neither UTF-8 nor GB18030')
+          PY
