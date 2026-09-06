@@ -19,10 +19,10 @@ permissions:
 
 jobs:
   extract:
-    name: Extract Unity fatal context
+    name: Extract Unity live tail
     runs-on: ubuntu-latest
     steps:
-      - name: Download and isolate fatal Unity context
+      - name: Download compact live tail
         shell: bash
         env:
           GH_TOKEN: ${{ github.token }}
@@ -31,74 +31,28 @@ jobs:
           set -euo pipefail
           JOB_ID="${INPUT_JOB_ID:-101515002224}"
           LOG="$RUNNER_TEMP/unity-job.log"
-
           curl -L --fail --silent --show-error \
             -H "Accept: application/vnd.github+json" \
             -H "Authorization: Bearer $GH_TOKEN" \
             -H "X-GitHub-Api-Version: 2022-11-28" \
             "https://api.github.com/repos/$GITHUB_REPOSITORY/actions/jobs/$JOB_ID/logs" \
             -o "$LOG"
-
-          echo "Downloaded $(wc -c < "$LOG" | tr -d ' ') bytes from job $JOB_ID"
-
           python3 - "$LOG" <<'PY'
           from pathlib import Path
           import re, sys
-
-          path = Path(sys.argv[1])
-          text = path.read_text(encoding="utf-8-sig", errors="replace")
+          text = Path(sys.argv[1]).read_text(encoding="utf-8-sig", errors="replace")
           text = re.sub(r"\x1b\[[0-9;]*[A-Za-z]", "", text)
           lines = text.splitlines()
-
-          failure_idx = None
-          for i, line in enumerate(lines):
-              if "#         Failure         #" in line:
-                  failure_idx = i
-                  break
-          if failure_idx is None:
-              failure_idx = len(lines)
-
-          pre = lines[:failure_idx]
-
-          strong = re.compile(
-              r"error CS\d+|BuildFailedException|Compilation failed|Scripts have compiler errors|"
-              r"Player build failed|Error building Player|Unhandled exception|Exception:|"
-              r"Aborting batchmode|executeMethod.*failed|BuildPlayer|BuildPipeline|"
-              r"Failed to build|build result.*failed|Build failed, with exit code|"
-              r"\bfatal\b|\berror:\s",
-              re.IGNORECASE,
-          )
-
-          matches = [i for i, line in enumerate(pre) if strong.search(line)]
-
-          print("===== Last strong error/failure contexts before game-ci Failure banner =====")
-          selected = matches[-40:]
-          windows = []
-          for i in selected:
-              start = max(0, i - 5)
-              end = min(len(pre), i + 9)
-              if windows and start <= windows[-1][1] + 1:
-                  windows[-1] = (windows[-1][0], max(windows[-1][1], end))
-              else:
-                  windows.append((start, end))
-
-          emitted = 0
-          for start, end in windows:
-              for idx in range(start, end):
-                  print(f"{idx + 1}: {pre[idx]}")
-                  emitted += 1
-                  if emitted >= 260:
-                      print("[fatal context truncated at 260 lines]")
-                      break
-              if emitted >= 260:
-                  break
-              print("---")
-
-          if not selected:
-              print("No strong fatal pattern matched.")
-
-          print("===== Last 220 lines before current log end/failure banner =====")
-          start = max(0, failure_idx - 220)
-          for idx in range(start, failure_idx):
-              print(f"{idx + 1}: {lines[idx]}")
+          fatal = re.compile(r"error CS\d+|BuildFailedException|Scripts have compiler errors|Aborting batchmode|Error building Player|Unhandled exception|\bfatal\b|##\[error\]", re.I)
+          hits = [i for i,l in enumerate(lines) if fatal.search(l)]
+          print(f"log_lines={len(lines)} fatal_matches={len(hits)}")
+          if hits:
+              print("===== latest fatal matches =====")
+              for i in hits[-12:]:
+                  for j in range(max(0,i-3), min(len(lines),i+5)):
+                      print(f"{j+1}: {lines[j]}")
+                  print("---")
+          print("===== latest 120 lines =====")
+          for i,l in enumerate(lines[-120:], start=max(1,len(lines)-119)):
+              print(f"{i}: {l}")
           PY
