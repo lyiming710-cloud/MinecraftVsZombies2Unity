@@ -43,7 +43,7 @@ jobs:
           text = Path(sys.argv[1]).read_text(encoding="utf-8-sig", errors="replace")
           text = re.sub(r"\x1b\[[0-9;]*[A-Za-z]", "", text)
           lines = text.splitlines()
-          fatal = re.compile(r"error CS\d+|BuildFailedException|Scripts have compiler errors|Aborting batchmode|Error building Player|Unhandled exception|\bfatal\b|##\[error\]", re.I)
+          fatal = re.compile(r"error CS\d+|BuildFailedException|Scripts have compiler errors|Aborting batchmode|Error building Player|Unhandled exception|\bfatal\b|##\[error\]|\*\* BUILD FAILED \*\*", re.I)
           hits = [i for i,l in enumerate(lines) if fatal.search(l)]
           print(f"log_lines={len(lines)} fatal_matches={len(hits)}")
           if hits:
@@ -52,7 +52,8 @@ jobs:
                   for j in range(max(0,i-3), min(len(lines),i+5)):
                       print(f"{j+1}: {lines[j]}")
                   print("---")
-          print("===== latest 120 lines =====")
-          for i,l in enumerate(lines[-120:], start=max(1,len(lines)-119)):
+          print("===== latest 140 lines =====")
+          for i,l in enumerate(lines[-140:], start=max(1,len(lines)-139)):
               print(f"{i}: {l}")
           PY
+# snapshot: xcode-live-2
