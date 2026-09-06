@@ -22,6 +22,8 @@ jobs:
     name: Unity iOS -> unsigned IPA
     runs-on: macos-14
     timeout-minutes: 120
+    outputs:
+      unity_error_summary: ${{ steps.unity_error.outputs.summary }}
 
     steps:
       - name: Checkout repository
@@ -57,6 +59,8 @@ jobs:
             Library-iOS-2022.3.62f3-
 
       - name: Export Unity iOS Xcode project
+        id: unity_export
+        continue-on-error: true
         uses: game-ci/unity-builder@v5
         env:
           UNITY_LICENSE: ${{ secrets.UNITY_LICENSE }}
@@ -71,22 +75,45 @@ jobs:
           allowDirtyBuild: true
           cacheUnityInstallationOnMac: true
 
-      - name: Print Unity errors
-        if: failure()
+      - name: Capture Unity error summary
+        id: unity_error
+        if: steps.unity_export.outcome == 'failure'
         shell: bash
         run: |
+          set -u
           LOG="$HOME/Library/Logs/Unity/Editor.log"
+          OUT="$RUNNER_TEMP/unity-error-summary.txt"
           if [[ -f "$LOG" ]]; then
-            echo "===== Filtered Unity errors ====="
-            grep -nEi 'error CS[0-9]+|Build failed|Compilation failed|Exception|IL2CPP|Addressables|error:' "$LOG" | tail -500 || true
-            echo "===== Unity Editor.log tail ====="
-            tail -1200 "$LOG" || true
+            {
+              echo "===== Filtered Unity fatal/error lines ====="
+              grep -nEi 'error CS[0-9]+|BuildFailedException|Build failed|Compilation failed|Scripts have compiler errors|Player build failed|Error building Player|Exception:|IL2CPP|Addressables|error:' "$LOG" | tail -180 || true
+              echo
+              echo "===== Last 220 lines of Unity Editor.log ====="
+              tail -220 "$LOG" || true
+            } > "$OUT"
           else
-            echo "Unity Editor.log not found at $LOG"
+            printf '%s\n' "Unity Editor.log not found at $LOG" > "$OUT"
           fi
+
+          # Keep the job output small enough that the connector can retrieve it reliably.
+          python3 - "$OUT" "$GITHUB_OUTPUT" <<'PY'
+          from pathlib import Path
+          import sys, uuid
+          src = Path(sys.argv[1])
+          dst = Path(sys.argv[2])
+          text = src.read_text(encoding="utf-8", errors="replace")
+          if len(text) > 24000:
+              text = "[truncated to last 24000 chars]\n" + text[-24000:]
+          marker = "UNITYERR_" + uuid.uuid4().hex
+          with dst.open("a", encoding="utf-8") as f:
+              f.write(f"summary<<{marker}\n{text}\n{marker}\n")
+          PY
+
+          cat "$OUT"
 
       - name: Locate Xcode project
         id: xcode
+        if: steps.unity_export.outcome == 'success'
         shell: bash
         run: |
           set -euo pipefail
@@ -100,6 +127,7 @@ jobs:
           echo "Found $PROJECT"
 
       - name: Build unsigned device app
+        if: steps.unity_export.outcome == 'success'
         shell: bash
         run: |
           set -euo pipefail
@@ -134,6 +162,7 @@ jobs:
           /usr/bin/unzip -l build/MinecraftVSZombies2-iOS-unsigned.ipa | head -80
 
       - name: Upload unsigned IPA
+        if: steps.unity_export.outcome == 'success'
         uses: actions/upload-artifact@v4
         with:
           name: MinecraftVSZombies2-iOS-unsigned
@@ -142,7 +171,7 @@ jobs:
           compression-level: 0
 
       - name: Upload build debug data on failure
-        if: failure()
+        if: steps.unity_export.outcome == 'failure' || failure()
         uses: actions/upload-artifact@v4
         with:
           name: ios-build-debug
@@ -151,3 +180,22 @@ jobs:
             ~/Library/Logs/Unity/Editor.log
           if-no-files-found: ignore
           retention-days: 30
+
+      - name: Mark Unity export failure
+        if: steps.unity_export.outcome == 'failure'
+        shell: bash
+        run: |
+          echo "::error::Unity iOS export failed; see the concise Unity error report job."
+          exit 1
+
+  unity-error-report:
+    name: Unity concise error report
+    needs: build-ios
+    if: always() && needs.build-ios.outputs.unity_error_summary != ''
+    runs-on: ubuntu-latest
+    steps:
+      - name: Print concise Unity failure
+        shell: bash
+        env:
+          SUMMARY: ${{ needs.build-ios.outputs.unity_error_summary }}
+        run: printf '%s\n' "$SUMMARY"
