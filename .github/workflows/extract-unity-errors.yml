@@ -19,10 +19,10 @@ permissions:
 
 jobs:
   extract:
-    name: Extract Unity error context
+    name: Extract Unity fatal context
     runs-on: ubuntu-latest
     steps:
-      - name: Download and filter completed job log
+      - name: Download and isolate fatal Unity context
         shell: bash
         env:
           GH_TOKEN: ${{ github.token }}
@@ -47,45 +47,62 @@ jobs:
 
           path = Path(sys.argv[1])
           text = path.read_text(encoding="utf-8-sig", errors="replace")
-          # Strip ANSI escape sequences so pattern matching and output stay compact.
           text = re.sub(r"\x1b\[[0-9;]*[A-Za-z]", "", text)
           lines = text.splitlines()
 
-          patterns = re.compile(
-              r"##\[error\]|error CS\d+|BuildFailedException|Compilation failed|"
-              r"Scripts have compiler errors|Player build failed|Error building Player|"
-              r"Addressable|Addressables|IL2CPP|Unhandled exception|Exception:|"
-              r"Build failed, with exit code|FAILURE|\berror:\s",
+          # Find the game-ci failure banner generated after Unity has already exited.
+          failure_idx = None
+          for i, line in enumerate(lines):
+              if "#         Failure         #" in line:
+                  failure_idx = i
+                  break
+          if failure_idx is None:
+              failure_idx = len(lines)
+
+          # Only inspect the Unity/action output before the wrapper starts its failure banner.
+          pre = lines[:failure_idx]
+
+          strong = re.compile(
+              r"error CS\d+|BuildFailedException|Compilation failed|Scripts have compiler errors|"
+              r"Player build failed|Error building Player|Unhandled exception|Exception:|"
+              r"Aborting batchmode|executeMethod.*failed|BuildPlayer|BuildPipeline|"
+              r"Failed to build|build result.*failed|Build failed, with exit code|"
+              r"\bfatal\b|\berror:\s",
               re.IGNORECASE,
           )
 
-          matches = [i for i, line in enumerate(lines) if patterns.search(line)]
+          matches = [i for i, line in enumerate(pre) if strong.search(line)]
+
+          print("===== Last strong error/failure contexts before game-ci Failure banner =====")
+          selected = matches[-40:]
           windows = []
-          for i in matches:
-              start = max(0, i - 7)
-              end = min(len(lines), i + 11)
-              if windows and start <= windows[-1][1] + 2:
+          for i in selected:
+              start = max(0, i - 5)
+              end = min(len(pre), i + 9)
+              if windows and start <= windows[-1][1] + 1:
                   windows[-1] = (windows[-1][0], max(windows[-1][1], end))
               else:
                   windows.append((start, end))
 
-          print("===== Unity/action error contexts =====")
           emitted = 0
           for start, end in windows:
               for idx in range(start, end):
-                  print(f"{idx + 1}: {lines[idx]}")
+                  print(f"{idx + 1}: {pre[idx]}")
                   emitted += 1
-                  if emitted >= 420:
-                      print("[error context truncated at 420 lines]")
+                  if emitted >= 260:
+                      print("[fatal context truncated at 260 lines]")
                       break
-              if emitted >= 420:
+              if emitted >= 260:
                   break
               print("---")
 
-          if not matches:
-              print("No configured error pattern matched.")
+          if not selected:
+              print("No strong fatal pattern matched.")
 
-          print("===== Final 180 log lines =====")
-          for idx, line in enumerate(lines[-180:], start=max(1, len(lines) - 179)):
-              print(f"{idx}: {line}")
+          # Also show only the last 220 lines immediately before the failure banner.
+          # This catches failures whose wording does not contain one of the patterns above.
+          print("===== Last 220 lines immediately before game-ci Failure banner =====")
+          start = max(0, failure_idx - 220)
+          for idx in range(start, failure_idx):
+              print(f"{idx + 1}: {lines[idx]}")
           PY
