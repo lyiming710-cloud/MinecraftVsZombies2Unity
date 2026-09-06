@@ -33,22 +33,45 @@ jobs:
           submodules: recursive
           fetch-depth: 0
 
-      - name: Normalize TalkConverter source encoding
+      - name: Normalize legacy CSharp source encodings
         shell: bash
         run: |
           set -euo pipefail
           python3 - <<'PY'
           from pathlib import Path
 
-          path = Path("Assets/Scripts/Editor/Menus/TalkConverter.cs")
-          raw = path.read_bytes()
-          try:
-              text = raw.decode("utf-8")
-              source_encoding = "utf-8"
-          except UnicodeDecodeError:
-              text = raw.decode("gb18030")
-              source_encoding = "gb18030"
+          legacy = []
+          unknown = []
 
+          for path in sorted(Path("Assets").rglob("*.cs")):
+              if not path.is_file():
+                  continue
+              raw = path.read_bytes()
+              try:
+                  raw.decode("utf-8-sig")
+                  continue
+              except UnicodeDecodeError:
+                  pass
+
+              try:
+                  text = raw.decode("gb18030")
+              except UnicodeDecodeError as exc:
+                  unknown.append((str(path), str(exc)))
+                  continue
+
+              path.write_text(text, encoding="utf-8-sig", newline="\n")
+              legacy.append(str(path))
+
+          if unknown:
+              for path, error in unknown:
+                  print(f"UNKNOWN_ENCODING\t{path}\t{error}")
+              raise SystemExit("Found C# files that are neither UTF-8 nor GB18030")
+
+          # TalkConverter used full-width punctuation as char literals. Keep the
+          # already-proven Unicode-escape workaround after transcoding so Roslyn
+          # cannot misinterpret those literals on the macOS runner.
+          talk = Path("Assets/Scripts/Editor/Menus/TalkConverter.cs")
+          text = talk.read_text(encoding="utf-8-sig")
           replacements = {
               "'【'": r"'\u3010'",
               "'】'": r"'\u3011'",
@@ -56,25 +79,36 @@ jobs:
               "'）'": r"'\uFF09'",
               "'：'": r"'\uFF1A'",
           }
-          counts = {}
           for old, new in replacements.items():
-              counts[old] = text.count(old)
               text = text.replace(old, new)
+          talk.write_text(text, encoding="utf-8-sig", newline="\n")
 
-          expected = {"'【'": 1, "'】'": 1, "'（'": 2, "'）'": 2, "'：'": 1}
-          if counts != expected:
-              raise SystemExit(f"Unexpected TalkConverter literal counts: {counts!r}")
+          # Verify every C# file that will reach Roslyn is now valid UTF-8.
+          invalid_after = []
+          for path in sorted(Path("Assets").rglob("*.cs")):
+              if not path.is_file():
+                  continue
+              try:
+                  path.read_bytes().decode("utf-8-sig")
+              except UnicodeDecodeError as exc:
+                  invalid_after.append((str(path), str(exc)))
+          if invalid_after:
+              for path, error in invalid_after:
+                  print(f"STILL_INVALID\t{path}\t{error}")
+              raise SystemExit("C# UTF-8 normalization verification failed")
 
-          # UTF-8 with BOM makes Roslyn's source encoding explicit on macOS.
-          path.write_text(text, encoding="utf-8-sig", newline="\n")
+          # Regression check for the exact strings that were mojibake in the
+          # first iOS IPA. These live in the legacy-encoded options controller.
+          options = Path("Assets/Scripts/MVZ2/Options/Dialog/OptionsDialogController.cs").read_text(encoding="utf-8-sig")
+          expected = ("音乐音量：{0}", "音效音量：{0}", "更多选项", "难度：{0}")
+          missing = [item for item in expected if item not in options]
+          if missing:
+              raise SystemExit(f"Options text transcoding regression: missing {missing!r}")
 
-          verify = path.read_text(encoding="utf-8-sig")
-          escapes = (r"'\u3010'", r"'\u3011'", r"'\uFF08'", r"'\uFF09'", r"'\uFF1A'")
-          if not all(item in verify for item in escapes):
-              raise SystemExit("Unicode escape verification failed")
-
-          print(f"TalkConverter transcoded from {source_encoding} to utf-8-sig")
-          print(f"Replaced literal counts: {counts}")
+          print(f"LEGACY_CSHARP_TRANSCODED_COUNT={len(legacy)}")
+          for path in legacy:
+              print(f"TRANSCODED_GB18030_TO_UTF8\t{path}")
+          print("Options Chinese string verification passed")
           PY
 
       - name: Verify Unity activation secrets
