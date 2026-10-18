@@ -1,0 +1,302 @@
+name: Build MVZ2 0.7.1 unsigned iOS IPA
+
+on:
+  workflow_dispatch:
+  push:
+    branches:
+      - ios-0.7-build-20261018
+    paths:
+      - "Assets/**"
+      - "Packages/**"
+      - "ProjectSettings/**"
+      - ".github/workflows/ios-unsigned.yml"
+
+permissions:
+  contents: read
+
+env:
+  FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: "true"
+
+jobs:
+  build-ios:
+    name: Unity iOS -> unsigned IPA
+    runs-on: macos-14
+    timeout-minutes: 120
+    outputs:
+      unity_error_summary: ${{ steps.unity_error.outputs.summary }}
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v5
+        with:
+          lfs: true
+          submodules: recursive
+          fetch-depth: 0
+
+      - name: Normalize legacy CSharp source encodings
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 - <<'PY'
+          from pathlib import Path
+
+          legacy = []
+          unknown = []
+
+          for path in sorted(Path("Assets").rglob("*.cs")):
+              if not path.is_file():
+                  continue
+              raw = path.read_bytes()
+              try:
+                  raw.decode("utf-8-sig")
+                  continue
+              except UnicodeDecodeError:
+                  pass
+
+              try:
+                  text = raw.decode("gb18030")
+              except UnicodeDecodeError as exc:
+                  unknown.append((str(path), str(exc)))
+                  continue
+
+              path.write_text(text, encoding="utf-8-sig", newline="\n")
+              legacy.append(str(path))
+
+          if unknown:
+              for path, error in unknown:
+                  print(f"UNKNOWN_ENCODING\t{path}\t{error}")
+              raise SystemExit("Found C# files that are neither UTF-8 nor GB18030")
+
+          # TalkConverter used full-width punctuation as char literals. Keep the
+          # already-proven Unicode-escape workaround after transcoding so Roslyn
+          # cannot misinterpret those literals on the macOS runner.
+          talk = Path("Assets/Scripts/Editor/Menus/TalkConverter.cs")
+          text = talk.read_text(encoding="utf-8-sig")
+          replacements = {
+              "'【'": r"'\u3010'",
+              "'】'": r"'\u3011'",
+              "'（'": r"'\uFF08'",
+              "'）'": r"'\uFF09'",
+              "'：'": r"'\uFF1A'",
+          }
+          for old, new in replacements.items():
+              text = text.replace(old, new)
+          talk.write_text(text, encoding="utf-8-sig", newline="\n")
+
+          # Verify every C# file that will reach Roslyn is now valid UTF-8.
+          invalid_after = []
+          for path in sorted(Path("Assets").rglob("*.cs")):
+              if not path.is_file():
+                  continue
+              try:
+                  path.read_bytes().decode("utf-8-sig")
+              except UnicodeDecodeError as exc:
+                  invalid_after.append((str(path), str(exc)))
+          if invalid_after:
+              for path, error in invalid_after:
+                  print(f"STILL_INVALID\t{path}\t{error}")
+              raise SystemExit("C# UTF-8 normalization verification failed")
+
+          # Regression check for the exact strings that were mojibake in the
+          # first iOS IPA. These live in the legacy-encoded options controller.
+          options = Path("Assets/Scripts/MVZ2/Options/Dialog/OptionsDialogController.cs").read_text(encoding="utf-8-sig")
+          expected = ("音乐音量：{0}", "音效音量：{0}", "更多选项", "难度：{0}")
+          missing = [item for item in expected if item not in options]
+          if missing:
+              raise SystemExit(f"Options text transcoding regression: missing {missing!r}")
+
+          print(f"LEGACY_CSHARP_TRANSCODED_COUNT={len(legacy)}")
+          for path in legacy:
+              print(f"TRANSCODED_GB18030_TO_UTF8\t{path}")
+          print("Options Chinese string verification passed")
+          PY
+
+      - name: Verify Unity activation secrets
+        shell: bash
+        env:
+          UNITY_LICENSE: ${{ secrets.UNITY_LICENSE }}
+          UNITY_SERIAL: ${{ secrets.UNITY_SERIAL }}
+          UNITY_EMAIL: ${{ secrets.UNITY_EMAIL }}
+          UNITY_PASSWORD: ${{ secrets.UNITY_PASSWORD }}
+        run: |
+          if [[ -z "$UNITY_LICENSE" && -z "$UNITY_SERIAL" ]]; then
+            echo "::error::No Unity activation secret is configured. Add UNITY_LICENSE (Personal .ulf contents) or UNITY_SERIAL (Pro/Plus), plus UNITY_EMAIL and UNITY_PASSWORD."
+            exit 1
+          fi
+          if [[ -z "$UNITY_EMAIL" || -z "$UNITY_PASSWORD" ]]; then
+            echo "::error::UNITY_EMAIL and UNITY_PASSWORD are required by the Unity activation step."
+            exit 1
+          fi
+
+      - name: Cache Unity Library
+        uses: actions/cache@v4
+        with:
+          path: Library
+          key: Library-iOS-2022.3.62f3-${{ hashFiles('Assets/**', 'Packages/**', 'ProjectSettings/**') }}
+          restore-keys: |
+            Library-iOS-2022.3.62f3-
+
+      - name: Export Unity iOS Xcode project
+        id: unity_export
+        continue-on-error: true
+        uses: game-ci/unity-builder@v5
+        env:
+          UNITY_LICENSE: ${{ secrets.UNITY_LICENSE }}
+          UNITY_SERIAL: ${{ secrets.UNITY_SERIAL }}
+          UNITY_EMAIL: ${{ secrets.UNITY_EMAIL }}
+          UNITY_PASSWORD: ${{ secrets.UNITY_PASSWORD }}
+        with:
+          unityVersion: 2022.3.62f3
+          targetPlatform: iOS
+          buildsPath: build
+          buildName: iOS
+          allowDirtyBuild: true
+          cacheUnityInstallationOnMac: true
+
+      - name: Capture Unity error summary
+        id: unity_error
+        if: steps.unity_export.outcome == 'failure'
+        shell: bash
+        run: |
+          set -u
+          OUT="$RUNNER_TEMP/unity-error-summary.txt"
+          : > "$OUT"
+
+          {
+            echo "===== game-ci / Unity log files found ====="
+            for candidate in \
+              "$GITHUB_WORKSPACE/out.log" \
+              "$HOME/.game-ci/game-ci.log" \
+              "$HOME/Library/Logs/Unity/Editor.log"; do
+              if [[ -f "$candidate" ]]; then
+                printf '%s (%s bytes)\n' "$candidate" "$(wc -c < "$candidate" | tr -d ' ')"
+              fi
+            done
+            find "$GITHUB_WORKSPACE" "$RUNNER_TEMP" -maxdepth 5 -type f \( -name 'out.log' -o -name 'Editor.log' -o -name '*unity*.log' -o -name 'game-ci.log' \) -print 2>/dev/null | sort -u || true
+
+            echo
+            echo "===== Project out.log errors ====="
+            if [[ -f "$GITHUB_WORKSPACE/out.log" ]]; then
+              grep -nEi 'error CS[0-9]+|BuildFailedException|Build failed|Compilation failed|Scripts have compiler errors|Player build failed|Error building Player|Exception:|IL2CPP|Addressables|error:' "$GITHUB_WORKSPACE/out.log" | tail -220 || true
+              echo "----- out.log tail -----"
+              tail -260 "$GITHUB_WORKSPACE/out.log" || true
+            else
+              echo "No $GITHUB_WORKSPACE/out.log"
+            fi
+
+            echo
+            echo "===== game-ci log errors ====="
+            if [[ -f "$HOME/.game-ci/game-ci.log" ]]; then
+              grep -nEi 'error|fail|exception|exit code' "$HOME/.game-ci/game-ci.log" | tail -160 || true
+              echo "----- game-ci.log tail -----"
+              tail -180 "$HOME/.game-ci/game-ci.log" || true
+            else
+              echo "No $HOME/.game-ci/game-ci.log"
+            fi
+          } > "$OUT"
+
+          python3 - "$OUT" "$GITHUB_OUTPUT" <<'PY'
+          from pathlib import Path
+          import sys, uuid
+          src = Path(sys.argv[1])
+          dst = Path(sys.argv[2])
+          text = src.read_text(encoding="utf-8", errors="replace")
+          if len(text) > 30000:
+              text = "[truncated to last 30000 chars]\n" + text[-30000:]
+          marker = "UNITYERR_" + uuid.uuid4().hex
+          with dst.open("a", encoding="utf-8") as f:
+              f.write(f"summary<<{marker}\n{text}\n{marker}\n")
+          PY
+
+          cat "$OUT"
+
+      - name: Locate Xcode project
+        id: xcode
+        if: steps.unity_export.outcome == 'success'
+        shell: bash
+        run: |
+          set -euo pipefail
+          PROJECT="$(find build -type d -name 'Unity-iPhone.xcodeproj' -print -quit)"
+          if [[ -z "$PROJECT" ]]; then
+            echo "::error::Unity did not produce Unity-iPhone.xcodeproj."
+            find build -maxdepth 4 -print || true
+            exit 1
+          fi
+          echo "project=$PROJECT" >> "$GITHUB_OUTPUT"
+          echo "Found $PROJECT"
+
+      - name: Build unsigned device app
+        if: steps.unity_export.outcome == 'success'
+        shell: bash
+        run: |
+          set -euo pipefail
+          PROJECT="${{ steps.xcode.outputs.project }}"
+          rm -rf build/DerivedData build/Payload build/MinecraftVSZombies2-0.7.1-iOS-unsigned.ipa
+
+          xcodebuild \
+            -project "$PROJECT" \
+            -scheme Unity-iPhone \
+            -configuration Release \
+            -sdk iphoneos \
+            -derivedDataPath build/DerivedData \
+            CODE_SIGNING_ALLOWED=NO \
+            CODE_SIGNING_REQUIRED=NO \
+            CODE_SIGN_IDENTITY="" \
+            DEVELOPMENT_TEAM="" \
+            build
+
+          APP="$(find build/DerivedData/Build/Products/Release-iphoneos -maxdepth 1 -type d -name '*.app' -print -quit)"
+          if [[ -z "$APP" ]]; then
+            echo "::error::Xcode build completed but no .app bundle was found."
+            find build/DerivedData/Build/Products -maxdepth 4 -print || true
+            exit 1
+          fi
+
+          mkdir -p build/Payload
+          ditto "$APP" "build/Payload/$(basename "$APP")"
+          (
+            cd build
+            /usr/bin/zip -qry MinecraftVSZombies2-0.7.1-iOS-unsigned.ipa Payload
+          )
+          /usr/bin/unzip -l build/MinecraftVSZombies2-0.7.1-iOS-unsigned.ipa | head -80
+
+      - name: Upload unsigned IPA
+        if: steps.unity_export.outcome == 'success'
+        uses: actions/upload-artifact@v4
+        with:
+          name: MinecraftVSZombies2-0.7.1-iOS-unsigned
+          path: build/MinecraftVSZombies2-0.7.1-iOS-unsigned.ipa
+          if-no-files-found: error
+          compression-level: 0
+
+      - name: Upload build debug data on failure
+        if: steps.unity_export.outcome == 'failure' || failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: ios-build-debug
+          path: |
+            build
+            out.log
+            ~/.game-ci/game-ci.log
+            ~/Library/Logs/Unity/Editor.log
+          if-no-files-found: ignore
+          retention-days: 30
+
+      - name: Mark Unity export failure
+        if: steps.unity_export.outcome == 'failure'
+        shell: bash
+        run: |
+          echo "::error::Unity iOS export failed; see the concise Unity error report job."
+          exit 1
+
+  unity-error-report:
+    name: Unity concise error report
+    needs: build-ios
+    if: always() && needs.build-ios.outputs.unity_error_summary != ''
+    runs-on: ubuntu-latest
+    steps:
+      - name: Print concise Unity failure
+        shell: bash
+        env:
+          SUMMARY: ${{ needs.build-ios.outputs.unity_error_summary }}
+        run: printf '%s\n' "$SUMMARY"
