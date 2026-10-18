@@ -2963,6 +2963,13 @@ MonoBehaviour:
     - Main
     - Sprite
     FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: 319a842257d3a074a807a2a2806fe3fa
+    m_Address: mvz2:castle_level_sub
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - Main
+    - Music
+    FlaggedDuringContentUpdateRestriction: 0
   - m_GUID: 31d9bab9e0866384faddc3f3fd0790a6
     m_Address: mvz2:shock
     m_ReadOnly: 0
@@ -7230,6 +7237,13 @@ MonoBehaviour:
     m_SerializedLabels:
     - Main
     - Sound
+    FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: 74b06f4b29b2a654a826531705e9f36a
+    m_Address: mvz2:entity/contraption/mine_tnt_body
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - Main
+    - Sprite
     FlaggedDuringContentUpdateRestriction: 0
   - m_GUID: 74d8652e30ae6cc4facf859271ca3fff
     m_Address: mvz2:commands

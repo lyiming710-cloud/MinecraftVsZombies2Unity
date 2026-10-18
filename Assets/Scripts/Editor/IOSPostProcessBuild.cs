@@ -21,6 +21,9 @@ namespace MVZ2.Editor
             // Opt out of iPadOS compatibility-mode pointer translation so
             // trackpads/mice remain distinguishable from direct finger touches.
             plist.root.SetBoolean("UIApplicationSupportsIndirectInputEvents", true);
+            // Preserve the exact marketing/build versions in the generated iOS app.
+            plist.root.SetString("CFBundleShortVersionString", "0.7.2");
+            plist.root.SetString("CFBundleVersion", "702");
 
             plist.WriteToFile(plistPath);
         }

@@ -1,8 +1,31 @@
+# 0.7.2
+## Added
+- Added the horde version for theme "Witherstep".
+
 ## Modified
 - Add alternating patterns to the land tiles of the level background of Youkai Mountain.
+- Freezenser will now freeze the water stains created by Zombie Clouds.
+
+### Balance
+- Youkai Mountain Day 11
+  - The speed of the Lily Pads provided by Nitori will now be dynamically adjusted based on the number of Lily Pads on the battlefield: 5 seconds when there are no Lily Pads, and 20 seconds when there are 16 Lily Pads.
+- Force Pad
+  - Effect adjustment:
+    - Previously: If a projectile's velocity along the direction of the Force Pad was positive, it would apply a knockback effect to the projectile; otherwise, the projectile would not be redirected (this caused bullets with velocities such as 0.0001 not to turn).
+    - Now: If the angle between the projectile's velocity and the direction of the Force Pad is less than 45°, it applies a knockback effect to the projectile. Passing projectiles are always redirected toward the direction of the Force Pad.
 
 ## Fixed
 - Fixed the issue where when a huge wave of monsters arrived, the number of spawned monsters actually increased by another huge wave.
+- Fixed the issue where a boss in a vulnerable state would remain invincible for a period of time when receiving damage exceeding the damage limit.
+- Fixed the issue where when a CAT-TL MK-II is destroyed by a Nuke, it would leave a Lily Pad on the broken tile.
+- Fixed the issue where the Skeleton Horse would become immobilized after jumping, causing it to pass over tall contraptions.
+- Fixed the issue of "Starshard" not having hyperlinks in the Almanac description of Loan Sign.
+- Fixed the issue where the Anvils summoned by the Random China event 'Anvil Shower' does not have impact damage.
+- Fixed the issue where Gravity Pads will pull monsters in the Bubbles.
+- Fixed the issue where Gravity Pads cannot be displayed correctly in the interface of Teleporter Team.
+- Fixed the issue where Dream Silk and Cooling Cell in Teleporter Team, when summoned onto an existing contraption, would apply their effects to the existing contraption first instead of prioritizing the contraption at the same position in the team.
+- Fixed the issue where the translation of the "Earned!" text in the achievements interface was not working.
+- Fixed the issue where the sound effect of the moonlight sensor is still stone.
 
 ---
 
