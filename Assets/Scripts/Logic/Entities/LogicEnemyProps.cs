@@ -30,11 +30,16 @@ namespace MVZ2Logic.Entities
         }
         #endregion
 
-        #region 乘客位置
-        public static readonly PropertyMeta<Vector3> PASSENGER_OFFSET = Get<Vector3>("passengerOffset");
-        public static Vector3 GetPassengerOffset(this Entity enemy)
+        #region 游戏结束后跟随移动
+        public static readonly PropertyMeta<EntityID> FOLLOWED_KILLER_TARGET = Get<EntityID>("followed_killer_target");
+        public static EntityID? GetFollowedKillerTarget(this Entity enemy)
         {
-            return enemy.GetProperty<Vector3>(PASSENGER_OFFSET);
+            return enemy.GetProperty<EntityID>(FOLLOWED_KILLER_TARGET);
+        }
+        public static readonly PropertyMeta<Vector3> POSITION_OFFSET_RELATIVE_TO_KILLER = Get<Vector3>("position_offset_relative_to_killer");
+        public static Vector3 GetPositionOffsetRelativeToKiller(this Entity enemy)
+        {
+            return enemy.GetProperty<Vector3>(POSITION_OFFSET_RELATIVE_TO_KILLER);
         }
         #endregion
 
@@ -100,7 +105,7 @@ namespace MVZ2Logic.Entities
         {
             return enemy.GetProperty<bool>(FORCED_MOVEMENT);
         }
-        public static void IsForcedMovement(this Entity enemy, bool value)
+        public static void SetForcedMovement(this Entity enemy, bool value)
         {
             enemy.SetProperty<bool>(FORCED_MOVEMENT, value);
         }

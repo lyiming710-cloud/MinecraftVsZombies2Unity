@@ -17,6 +17,7 @@ using MVZ2Logic.Callbacks;
 using MVZ2Logic.Entities;
 using MVZ2Logic.Grids;
 using MVZ2Logic.Level;
+using PVZEngine;
 using PVZEngine.Buffs;
 using PVZEngine.Callbacks;
 using PVZEngine.Damages;
@@ -37,6 +38,7 @@ namespace MVZ2.GameContent.Areas
         {
             SetProperty(VanillaAreaProps.WATER_COLOR, new Color(0, 0.48f, 0.89f, 1));
             SetProperty(VanillaAreaProps.WATER_COLOR_CENSORED, new Color(0, 0.48f, 0.89f, 1));
+            SetProperty(VanillaLevelProps.WATER_FLOW_VELOCITY, new Vector3(10, 0, 0));
             AddTriggerFiltered(LogicLevelCallbacks.IS_TERRAIN, IsWaterCallback, filter: LogicTerrainTypes.water);
         }
         public override void Setup(LevelEngine level)
@@ -223,6 +225,10 @@ namespace MVZ2.GameContent.Areas
         }
         public static void DropGiantStones(LevelEngine level, int columnMin, int columnMax, int laneMin, int laneMax, int count, RandomGenerator rng)
         {
+            DropGiantBlocks(level, giantStonePool, giantStoneWeights, columnMin, columnMax, laneMin, laneMax, count, rng);
+        }
+        public static void DropGiantBlocks(LevelEngine level, IList<NamespaceID> pool, IList<float> weights, int columnMin, int columnMax, int laneMin, int laneMax, int count, RandomGenerator rng)
+        {
             level.PlaySound(VanillaSoundID.rockCrumble);
             level.ShakeScreen(3, 0, 30);
 
@@ -249,7 +255,8 @@ namespace MVZ2.GameContent.Areas
             {
                 var pos = resultTile.GetEntityPosition();
                 pos.y += 600f;
-                var giantStone = level.Spawn(VanillaContraptionID.giantStone, pos, null);
+                var id = pool.WeightedRandom(weights, rng);
+                var giantStone = level.Spawn(id, pos, null);
                 if (giantStone != null)
                 {
                     giantStone.AddBuff<ContraptionFallBuff>();
@@ -265,5 +272,13 @@ namespace MVZ2.GameContent.Areas
             level.SetProperty(PROP_POOL_WAVE, value);
         }
         public static readonly VanillaLevelPropertyMeta<float> PROP_POOL_WAVE = new VanillaLevelPropertyMeta<float>("PoolWave");
+        public static readonly NamespaceID[] giantStonePool = new NamespaceID[]
+        {
+            VanillaContraptionID.giantStone
+        };
+        public static readonly float[] giantStoneWeights = new float[]
+        {
+            1
+        };
     }
 }

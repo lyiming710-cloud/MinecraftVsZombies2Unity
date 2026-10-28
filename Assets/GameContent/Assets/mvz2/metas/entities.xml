@@ -397,6 +397,7 @@
                 <bool name="mvz2:canDeactive" value="false" />
                 <bool name="mvz2:loyal" value="true" />
                 <bool name="mvz2:dynamite" value="true" />
+                <bool name="mvz2:anchored_contraption" value="true" />
                 <float name="mvz2:damage" value="1800" />
                 <float name="mvz2:range" value="40" />
                 <id name="mvz2:placeSound" value="mvz2:grass" />
@@ -478,6 +479,7 @@
                 <float name="mvz2:damage" value="100" />
                 <float name="mvz2:range" value="120" />
                 <vector3 name="mvz2:size" x="32" y="48" z="32" />
+                <idArray name="mvz2:counter_for" value="mvz2:low_enemy" />
 
                 <int name="mvz2:cost" value="75" />
                 <id name="mvz2:rechargeId" value="mvz2:short" />
@@ -990,9 +992,11 @@
             </behaviours>
             <properties>
                 <bool name="mvz2:nocturnal" value="true" />
+                <bool name="mvz2:anchored_contraption" value="true" />
                 <id name="mvz2:placement" value="mvz2:buried" />
                 <vector3 name="mvz2:size" x="48" y="48" z="48" />
                 <idArray name="mvz2:gridLayers" value="mvz2:main mvz2:carrier" />
+                <idArray name="mvz2:counter_for" value="mvz2:low_enemy" />
 
                 <int name="mvz2:cost" value="125" />
                 <id name="mvz2:rechargeId" value="mvz2:long" />
@@ -1434,6 +1438,7 @@
                 <bool name="mvz2:canDeactive" value="false" />
                 <vector3 name="mvz2:size" x="80" y="40" z="64" />
                 <idArray name="mvz2:gridLayers" value="mvz2:protector" />
+                <idArray name="mvz2:counter_for" value="mvz2:low_enemy mvz2:flying_enemy" />
                 <id name="mvz2:shell" value="mvz2:metal" />
                 <bool name="mvz2:loyal" value="true" />
                 <bool name="mvz2:triggerActive" value="true" />
@@ -1602,6 +1607,7 @@
                 <bool name="mvz2:nocturnal" value="true" />
                 <bool name="mvz2:upgradeBlueprint" value="true" />
                 <id name="mvz2:upgradeFrom" value="mvz2:small_dispenser" />
+                <idArray name="mvz2:counter_for" value="mvz2:low_enemy" />
 
                 <float name="mvz2:damage" value="30" />
                 <float name="mvz2:range" value="360" />
@@ -1921,6 +1927,58 @@
                 <float name="mvz2:water_ground_limit_offset" value="-34" />
                 <int name="mvz2:waterInteraction" value="3" />
                 <id name="mvz2:placement" value="mvz2:amphibious" />
+                <vector3 name="mvz2:shadowScale" x="1.5" y="1.5" z="1.5" />
+
+                <int name="mvz2:cost" value="50" />
+                <id name="mvz2:rechargeId" value="mvz2:long" />
+            </properties>
+        </entity>
+        <entity template="contraption" id="giant_ice" name="巨型冰块" tooltip="阻碍怪物的前进，并保护背后的其他器械">
+            <behaviours includeSelf="false">
+                <behaviour operator="add" id="mvz2:model_damage_percent" />
+                <behaviour operator="add" id="mvz2:giant_stone" />
+            </behaviours>
+            <properties>
+                <bool name="mvz2:canDeactive" value="false" />
+                <bool name="mvz2:defensive" value="true" />
+                <bool name="mvz2:is_frost" value="true" />
+                <float name="mvz2:maxHealth" value="2000" />
+                <vector3 name="mvz2:size" x="58" y="58" z="58" />
+                <bool name="mvz2:instantEvoke" value="false" />
+                <bool name="mvz2:no_evoke" value="true" />
+                <int name="mvz2:force_against_kraken" value="1" />
+                <float name="mvz2:fallResistance" value="10000" />
+                <float name="mvz2:ejector_damage_override" value="400" />
+                <float name="mvz2:water_ground_limit_offset" value="-34" />
+                <int name="mvz2:waterInteraction" value="3" />
+                <id name="mvz2:placement" value="mvz2:amphibious" />
+                <id name="mvz2:shell" value="mvz2:ice" />
+                <vector3 name="mvz2:shadowScale" x="1.5" y="1.5" z="1.5" />
+
+                <int name="mvz2:cost" value="50" />
+                <id name="mvz2:rechargeId" value="mvz2:long" />
+            </properties>
+        </entity>
+        <entity template="contraption" id="giant_magma_block" name="巨型岩浆块" tooltip="阻碍怪物的前进，并保护背后的其他器械">
+            <behaviours includeSelf="false">
+                <behaviour operator="add" id="mvz2:model_damage_percent" />
+                <behaviour operator="add" id="mvz2:giant_stone" />
+            </behaviours>
+            <properties>
+                <bool name="mvz2:isFire" value="true" />
+                <bool name="mvz2:canDeactive" value="false" />
+                <bool name="mvz2:defensive" value="true" />
+                <float name="mvz2:maxHealth" value="2000" />
+                <vector3 name="mvz2:size" x="58" y="58" z="58" />
+                <bool name="mvz2:instantEvoke" value="false" />
+                <bool name="mvz2:no_evoke" value="true" />
+                <int name="mvz2:force_against_kraken" value="1" />
+                <float name="mvz2:fallResistance" value="10000" />
+                <float name="mvz2:ejector_damage_override" value="900" />
+                <float name="mvz2:water_ground_limit_offset" value="-34" />
+                <int name="mvz2:waterInteraction" value="3" />
+                <id name="mvz2:placement" value="mvz2:amphibious" />
+                <id name="mvz2:shell" value="mvz2:netherrack" />
                 <vector3 name="mvz2:shadowScale" x="1.5" y="1.5" z="1.5" />
 
                 <int name="mvz2:cost" value="50" />
@@ -3859,7 +3917,8 @@
             </behaviours>
             <properties>
                 <bool name="mvz2:pointToDirection" value="true" />
-                <vector3 name="mvz2:size" x="20" y="11" z="11" />
+                <vector3 name="mvz2:size" x="20" y="8" z="8" />
+                <idArray name="mvz2:damageEffects" value="mvz2:pointy" />
             </properties>
         </entity>
         <entity template="projectile" id="spike_ball">
@@ -3870,6 +3929,7 @@
                 <bool name="mvz2:no_homing" value="true" />
                 <bool name="mvz2:ignore_gravity_pad" value="true" />
                 <bool name="mvz2:ignore_force_pad" value="true" />
+                <idArray name="mvz2:damageEffects" value="mvz2:pointy mvz2:ignore_armor" />
             </properties>
         </entity>
         <entity template="projectile" id="diamond_caltrop">
@@ -3928,6 +3988,7 @@
         <entity template="projectile" id="wooden_ball">
             <behaviours>
                 <behaviour operator="add" id="mvz2:projectile_rotating" />
+                <behaviour operator="add" id="mvz2:projectile_drift_with_water" />
             </behaviours>
             <properties>
                 <bool name="mvz2:killOnGround" value="false" />
@@ -4588,6 +4649,7 @@
             </properties>
         </entity>
         <entity template="effect" id="giant_spike">
+            <behaviours includeSelf="false"/>
             <properties>
                 <bool name="mvz2:decorative" value="false" />
                 <int name="mvz2:maxTimeout" value="42" />

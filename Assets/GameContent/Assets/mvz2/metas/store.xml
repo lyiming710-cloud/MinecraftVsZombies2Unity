@@ -222,8 +222,8 @@
 
         <product id="hoe" sprite="mvz2:artifacts/hoe">
             <talks>
-                <talk character="mvz2:crazy_villager">我以前用过的锄头！每场战斗它都能杀死最开始出现的那只怪物！</talk>
-                <talk character="mvz2:tokiko">村民先生的锄头，每场战斗都能给第一只来的怪物当头一棒！</talk>
+                <talk character="mvz2:crazy_villager">我以前用过的锄头！每场战斗它都能杀死前三只出现的怪物！</talk>
+                <talk character="mvz2:tokiko">村民先生的锄头，每场战斗都能给前三只来的怪物当头一棒！</talk>
             </talks>
             <stages>
                 <stage price="1000" unlocks="mvz2:artifact.hoe" />
@@ -300,7 +300,7 @@
                 <condition required="mvz2:level.mausoleum_11" />
             </unlock>
             <talks>
-                <talk character="mvz2:crazy_villager">巨人的眼睛！你的器械造成的伤害变为两倍半，但是攻击速度也会减半！</talk>
+                <talk character="mvz2:crazy_villager">巨人的眼睛！你的器械造成的伤害变为两倍，但是攻击速度也会变为60%！</talk>
                 <talk character="mvz2:tokiko">有点吓人的大眼睛……它能让你的器械造成巨额伤害，但是攻击速度会变慢许多！</talk>
             </talks>
             <stages>

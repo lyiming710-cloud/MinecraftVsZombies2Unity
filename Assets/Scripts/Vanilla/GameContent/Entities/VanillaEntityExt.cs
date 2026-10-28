@@ -25,7 +25,6 @@ using MVZ2.Vanilla.Properties;
 using MVZ2.Vanilla.Shells;
 using MVZ2Logic;
 using MVZ2Logic.Armors;
-using MVZ2Logic.Contents.Enemies;
 using MVZ2Logic.Entities;
 using MVZ2Logic.Level;
 using PVZEngine;
@@ -1266,6 +1265,18 @@ namespace MVZ2.Vanilla.Entities
                 exploded = true;
             }
             return exploded;
+        }
+        public static bool TryBehaviourExplodeAndRemove(this Entity entity, float range, float damage)
+        {
+            if (entity.HasBehaviourExploded())
+                return false;
+            if (entity.TryBehaviourExplode(range, damage))
+            {
+                entity.Remove();
+                entity.SetHasBehaviourExploded(true);
+                return true;
+            }
+            return false;
         }
         #endregion
 

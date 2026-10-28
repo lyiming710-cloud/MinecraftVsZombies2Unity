@@ -39,6 +39,7 @@ using MVZ2Logic.Resources;
 using MVZ2Logic.Serialization;
 using PVZEngine;
 using PVZEngine.Level;
+using UnityEditor;
 using UnityEngine;
 
 namespace MVZ2.Managers
@@ -111,7 +112,6 @@ namespace MVZ2.Managers
                 await ResourceManager.LoadAllModResourcesMain(p);
                 FontManager.InitFontSprites();
             }));
-            loadPipeline.AddTask(new PipelineTask(TASK_LOAD_SPONSORS, (p) => SponsorManager.PullSponsors(p)));
 
             var task = loadPipeline.Run();
             initTask = task;
@@ -120,6 +120,11 @@ namespace MVZ2.Managers
                 loadPipeline = null;
                 initTask = null;
             });
+
+            if (OptionsManager.AutoUpdateSponsors())
+            {
+                SponsorManager.StartUpdateSponsors();
+            }
         }
 
         #region 贴图
@@ -153,6 +158,7 @@ namespace MVZ2.Managers
 #if UNITY_IOS
         private void OnApplicationPause(bool pause)
         {
+            // Persist progress before iOS suspends the application.
             if (pause)
                 SaveManager.SaveToFile();
         }
@@ -299,8 +305,6 @@ namespace MVZ2.Managers
 
         [TranslateMsg("初始化任务名称")]
         public const string TASK_LOAD_RESOURCES = "加载中……";
-        [TranslateMsg("初始化任务名称")]
-        public const string TASK_LOAD_SPONSORS = "获取赞助者列表……";
         public static MainManager Instance { get; private set; } = null!;
         public GlobalGame Game { get; private set; } = null!;
         public string BuiltinNamespace => builtinNamespace;

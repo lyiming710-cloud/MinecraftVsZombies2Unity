@@ -1,3 +1,70 @@
+# 0.7.3
+## Added
+- Added Command /cheat all.
+- In levels with water, if the player does not carry Lily Pad, a warning will now be displayed.
+- Wooden balls in the river of Youkai Mountain now drift with water.
+- Added some options for the list of sponsors.
+- Added the following tags for the Almanac:
+  - Cold
+  - Damage Type: Normal
+  - Damage Type: Explosion
+  - Damage Type: Slice
+  - Damage Type: Impact
+  - Damage Type: Fire
+  - Damage Type: Ice
+  - Damage Type: Lightning
+  - Damage Type: Light
+  - Damage Type: Armor-piercing
+  - Damage Type: Gold
+
+## Modified
+- Added counter-monster tags to the following contraptions; when these contraptions are brought, the corresponding warnings will no longer pop up:
+  - Punchton: Short
+  - Necrotombstone: Short
+  - Ejector: Short, Flying
+  - Infectenser: Short
+- Now, even if the "HP Bar Enabled" option is turned off, as long as the "Hover Display Range" option is greater than 0, entities within the cursor range will still display HP bars.
+- Added a 0.5-second game-over delay to "I, Zombie" levels to prevent an issue where a Wisp Fly's self-destruction causes the game to end immediately when the Furnace is about to produce redstone.
+- The priority of placement error messages for terrain-related contraptions, such as “Place Lily Pad first”, is now lower than that of entity-related error messages, such as “Position Occupied” (i.e., will not be displayed in preference).
+- Changed the loading of the sponsor list to asynchronous loading, no longer blocking access to the game.
+
+### Balance
+- Youkai Mountain Day 6
+  - The number of waves between huge waves of monsters is 7 instead of the usual 10.
+  - After a huge wave of zombies, Lightning Orb, Elastic Cloud, Giant Ice, and Giant Magma Block now drop randomly.
+  - Added Leather Cap Zombie.
+  - Number of contraptions dropped per wave: 3 -> 2
+  - Starshards are now allowed, but not for Teleporters.
+- Youkai Mountain Day 11
+  - Nitori now provides Lily Pads twice as fast as before.
+  - If Nitori has already started providing Lily Pads, the conveyor belt will no longer provide any Lily Pads.
+- Primal Force
+  - After a huge wave of zombies, Lightning Orb, Elastic Cloud, Giant Ice, and Giant Magma Block now drop randomly.
+  - Number of contraptions dropped per wave: 3 -> 2
+  - Starshards are now allowed, but not for Teleporters.
+- Mine TNT, Necrotombstone
+  - Added "Anchored" tag.
+- Pistenser, CAT-TL MK-II
+  - Size of spike projectiles: 20x11x11 (px)->20x8x8 (px)
+- Desire Pot
+  - The movement speed of blueprint pickups spawned by the evocation now randomly fluctuates between 50% and 200%.
+- Bubble Gun Gurgle
+  - Bubbles now take 20x spike damage or ground-spike damage.
+  - Bubbles now burst immediately after being chilled or frozen.
+
+## Fixed
+- Fixed the issue where the movement status of the ejected contraption would not be removed when using a Ejector.
+- Fixed the issue of Cow Horn not displaying its silhouette in the Almanac.
+- Fixed the issue where the description dialogue for Hoe in the store was not updated.
+- Fixed the issue of console outputs not breaking lines.
+- Fixed an issue in the music room where, after enabling a track's horde version, switching to another track that has a horde version and playing it would cause that track's horde version to continue for a few seconds after playback begins.
+- Fixed an issue in touch mode where the Pickaxe, Trigger, or Starshard could not correctly target the contraption directly below a Brick Cannon.
+- Fixed an issue where Prismatic Pylon caused the Iron Curtain effect of Stone Shield on the pylon to change from red to rainbow-colored.
+- Fixed an issue where explosive contraptions could explode multiple times under certain special circumstances (such as being killed by a Wisp Fly's self-destruction while being ejected).
+- Fixed an issue where forcibly moved monsters would not exit the change lane state.
+
+---
+
 # 0.7.2
 ## Added
 - Added the horde version for theme "Witherstep".

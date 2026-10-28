@@ -10,6 +10,7 @@ using System.Text;
 using System.Threading.Tasks;
 using MongoDB.Bson;
 using MongoDB.Bson.Serialization;
+using MukioI18n;
 using MVZ2.IO;
 using MVZ2.Managers;
 using MVZ2Logic.Games;
@@ -20,34 +21,97 @@ namespace MVZ2.Supporters
 {
     public class SponsorManager : MonoBehaviour, IGlobalSponsors
     {
+        public void StartUpdateSponsors()
+        {
+            if (sponsorPipeline != null)
+            {
+                return;
+            }
+            sponsorPipeline = new TaskPipeline();
+            sponsorPipeline.AddTask(new PipelineTask(TASK_LOAD_SPONSORS, async (p) =>
+            {
+                await PullSponsors(p);
+            }));
+            var sponsorTask = sponsorPipeline.Run();
+            sponsorTask.ContinueWith((t) =>
+            {
+                sponsorPipeline = null;
+            });
+        }
+        public void ForceUpdateSponsors(Action<bool>? onFinished)
+        {
+            if (sponsorPipeline != null)
+            {
+                return;
+            }
+            sponsorPipeline = new TaskPipeline();
+            sponsorPipeline.AddTask(new PipelineTask(TASK_LOAD_SPONSORS, async (p) =>
+            {
+                bool result = await ForcePullSponsors(p);
+                onFinished?.Invoke(result);
+                OnSponsorUpdateFinished?.Invoke(result);
+            }));
+            var sponsorTask = sponsorPipeline.Run();
+            sponsorTask.ContinueWith((t) =>
+            {
+                sponsorPipeline = null;
+            });
+        }
         public async Task PullSponsors(TaskProgress progress)
         {
             SponsorInfos? sponserCache = null;
             try
             {
                 sponserCache = LoadSponsorsCache();
+                if (sponserCache != null)
+                {
+                    SetCurrentSponsorInfos(sponserCache);
+                }
             }
             catch (Exception e)
             {
                 Debug.LogError($"加载赞助者名单缓存时出现错误：{e}");
             }
+
+            if (!ShouldRepull(sponserCache))
+            {
+                Debug.Log("赞助者名单无需更新。");
+                progress.SetProgress(1, "No need to pull");
+                return;
+            }
+
+            bool result = await ForcePullSponsors(progress);
+            OnSponsorUpdateFinished?.Invoke(result);
+        }
+        public async Task<bool> ForcePullSponsors(TaskProgress progress)
+        {
+            long now = DateTimeOffset.UtcNow.ToUnixTimeSeconds();
+            SponsorInfos sponsorCache = currentSponsors ?? new SponsorInfos();
+            sponsorCache.lastAttemptTime = now;
+
             try
             {
-                if (!ShouldRepull(sponserCache))
-                {
-                    SetCurrentSponsorInfos(sponserCache);
-                    progress.SetProgress(1, "No need to pull");
-                    return;
-                }
+                isUpdating = true;
                 var items = await GetAllSponsors(progress);
-                sponserCache = new SponsorInfos(this, items);
-                sponserCache.lastUpdateTime = DateTimeOffset.UtcNow.ToUnixTimeSeconds();
-                SetCurrentSponsorInfos(sponserCache);
-                SaveSponsorsCache(sponserCache);
+                sponsorCache.UpdateSponsors(this, items);
+                sponsorCache.lastUpdateTime = now;
+
+                var msg = Main.LanguageManager._(SPONSOR_UPDATED_SUCCESSFULLY);
+                Main.Scene.ShowPopup(msg);
+                return true;
             }
             catch (Exception e)
             {
                 Debug.LogError($"更新赞助者名单时出现错误：{e}");
+                var msg = Main.LanguageManager._(SPONSOR_UPDATE_FAILED);
+                Main.Scene.ShowPopup(msg);
+                return false;
+            }
+            finally
+            {
+                isUpdating = false;
+                SetCurrentSponsorInfos(sponsorCache);
+                SaveSponsorsCache(sponsorCache);
             }
         }
         public string[] GetSponsorPlanNames(int rankType, int rank)
@@ -78,8 +142,29 @@ namespace MVZ2.Supporters
             }
             return false;
         }
+        public long GetLastAttemptTime()
+        {
+            if (currentSponsors != null)
+            {
+                return currentSponsors.lastAttemptTime;
+            }
+            return -1;
+        }
+        public long GetLastSuccessTime()
+        {
+            if (currentSponsors != null)
+            {
+                return currentSponsors.lastUpdateTime;
+            }
+            return -1;
+        }
+        public bool IsUpdatingSponsors()
+        {
+            return isUpdating;
+        }
         private async Task<SponsorItem[]> GetAllSponsors(TaskProgress progress)
         {
+            Debug.Log("开始下载赞助者名单。");
             List<SponsorItem> sponsorList = new List<SponsorItem>();
             int numPerPage = 100;
             progress.SetProgress(0, "Page 1");
@@ -91,8 +176,10 @@ namespace MVZ2.Supporters
             if (resp.Result.List is SponsorItem[] items)
             {
                 sponsorList.AddRange(items);
+                Debug.Log("赞助者名单第1页下载成功。");
             }
             var totalPage = resp.Result.TotalPage;
+            Debug.Log($"赞助者名单共{totalPage}页。");
 
             for (int i = 2; i <= totalPage; i++)
             {
@@ -101,9 +188,11 @@ namespace MVZ2.Supporters
                 if (obj.Result?.List != null)
                 {
                     sponsorList.AddRange(obj.Result.List);
+                    Debug.Log($"赞助者名单第{i}页下载成功。");
                 }
             }
             progress.SetProgress(1, "Finished");
+            Debug.Log($"赞助者名单下载成功。");
 
             return sponsorList.ToArray();
         }
@@ -190,19 +279,79 @@ namespace MVZ2.Supporters
             var path = GetSponsorCacheFilePath();
             FileHelper.ValidateDirectoryExists(path);
             var json = saveInfo.ToJson();
-            Main.FileManager.WriteStringFile(path, json);
+            var tempPath = path + ".tmp";
+
+            try
+            {
+                // 写入临时文件
+                Main.FileManager.WriteStringFile(tempPath, json);
+
+                // 降级兼容替换方案
+                if (File.Exists(path))
+                {
+                    // 尝试使用 File.Replace（Windows 完美原子，某些旧版 Mono 可能不支持）
+                    try
+                    {
+                        File.Replace(tempPath, path, null);
+                        return;
+                    }
+                    catch (PlatformNotSupportedException)
+                    {
+                        // 如果平台不支持 Replace，则退化为删除后移动
+                        File.Delete(path);
+                    }
+                }
+
+                // 如果原文件不存在，或替换降级，直接移动
+                File.Move(tempPath, path);
+            }
+            catch (Exception ex)
+            {
+                try
+                {
+                    if (File.Exists(tempPath))
+                        File.Delete(tempPath);
+                }
+                catch
+                {
+                }
+                Debug.LogError($"保存赞助者缓存失败: {ex.Message}");
+            }
         }
         private bool ShouldRepull([NotNullWhen(false)] SponsorInfos? infos)
         {
             if (infos == null)
                 return true;
-            var lastTime = DateTimeOffset.FromUnixTimeSeconds(infos.lastUpdateTime).LocalDateTime;
-            var nowTime = DateTimeOffset.Now;
-            if (nowTime.Date != lastTime.Date)
-            {
+
+            // 1. 如果数据不过期，直接返回 false
+            if (!IsDataExpired(infos))
+                return false;
+
+            // 2. 如果数据过期了，检查上次“尝试请求”的时间
+            var lastAttempt = DateTimeOffset.FromUnixTimeSeconds(infos.lastAttemptTime);
+            var now = DateTimeOffset.UtcNow;
+
+            // 3. 如果距离上次尝试不到 1 小时（退避中），就不去请求
+            if ((now - lastAttempt).TotalHours < 1)
+                return false;
+
+            return true;
+        }
+        private bool IsDataExpired(SponsorInfos infos)
+        {
+            // 将 Unix 时间戳转为 UTC 时间
+            var lastUpdateTime = DateTimeOffset.FromUnixTimeSeconds(infos.lastUpdateTime);
+            // 获取当前的 UTC 时间
+            var nowTime = DateTimeOffset.UtcNow;
+
+            var elapsed = nowTime - lastUpdateTime;
+
+            // 如果当前时间比上次更新时间早（比如玩家把系统时间往回调了），当作过期处理
+            if (elapsed.TotalHours < 0)
                 return true;
-            }
-            return false;
+
+            // 距离上次更新超过 24 小时，才需要更新
+            return elapsed.TotalHours >= 24;
         }
         private string GetSponsorCacheFilePath()
         {
@@ -263,7 +412,15 @@ namespace MVZ2.Supporters
         #endregion
 
         public MainManager Main => MainManager.Instance;
+        public event Action<bool>? OnSponsorUpdateFinished;
+        private TaskPipeline? sponsorPipeline;
         private SponsorInfos? currentSponsors;
+        [TranslateMsg("初始化任务名称")]
+        public const string TASK_LOAD_SPONSORS = "获取赞助者列表……";
+        [TranslateMsg("赞助者名单更新提醒")]
+        public const string SPONSOR_UPDATED_SUCCESSFULLY = "赞助者名单已成功更新。";
+        [TranslateMsg("赞助者名单更新提醒")]
+        public const string SPONSOR_UPDATE_FAILED = "赞助者名单更新失败。";
         [SerializeField]
         private string userID = string.Empty;
         [SerializeField]
@@ -284,6 +441,7 @@ namespace MVZ2.Supporters
             0x11, 0x45, 0x14, 0x19, 0x19, 0x81, 0x08, 0x10,
             0x11, 0x45, 0x14, 0x19, 0x19, 0x81, 0x08, 0x10
         };
+        private bool isUpdating = false;
         [Serializable]
         public struct PlanEntry
         {

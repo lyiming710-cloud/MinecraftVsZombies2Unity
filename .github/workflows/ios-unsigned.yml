@@ -1,10 +1,10 @@
-name: Build MVZ2 0.7.2 unsigned iOS IPA
+name: Build MVZ2 0.7.3 unsigned iOS IPA
 
 on:
   workflow_dispatch:
   push:
     branches:
-      - ios-0.7.2-build-20261018
+      - ios-0.7.3-build-20261028
     paths:
       - "Assets/**"
       - "Packages/**"
@@ -148,7 +148,7 @@ jobs:
         with:
           unityVersion: 2022.3.62f3
           versioning: Custom
-          version: '0.7.2'
+          version: '0.7.3'
           targetPlatform: iOS
           buildsPath: build
           buildName: iOS
@@ -233,7 +233,7 @@ jobs:
         run: |
           set -euo pipefail
           PROJECT="${{ steps.xcode.outputs.project }}"
-          rm -rf build/DerivedData build/Payload build/MinecraftVSZombies2-0.7.2-iOS-unsigned.ipa
+          rm -rf build/DerivedData build/Payload build/MinecraftVSZombies2-0.7.3-iOS-unsigned.ipa
 
           xcodebuild \
             -project "$PROJECT" \
@@ -259,24 +259,24 @@ jobs:
           BUILD_VERSION="$(/usr/libexec/PlistBuddy -c 'Print :CFBundleVersion' "$APP_PLIST")"
           BUNDLE_ID="$(/usr/libexec/PlistBuddy -c 'Print :CFBundleIdentifier' "$APP_PLIST")"
           echo "IPA identity: bundle=$BUNDLE_ID version=$SHORT_VERSION build=$BUILD_VERSION"
-          [[ "$SHORT_VERSION" == "0.7.2" ]] || { echo "::error::Expected app version 0.7.2, got $SHORT_VERSION"; exit 1; }
-          [[ "$BUILD_VERSION" == "702" ]] || { echo "::error::Expected iOS build 702, got $BUILD_VERSION"; exit 1; }
+          [[ "$SHORT_VERSION" == "0.7.3" ]] || { echo "::error::Expected app version 0.7.3, got $SHORT_VERSION"; exit 1; }
+          [[ "$BUILD_VERSION" == "703" ]] || { echo "::error::Expected iOS build 703, got $BUILD_VERSION"; exit 1; }
           [[ "$BUNDLE_ID" == "com.cuerzor.minecraftVSZombies2" ]] || { echo "::error::Unexpected bundle ID $BUNDLE_ID"; exit 1; }
 
           mkdir -p build/Payload
           ditto "$APP" "build/Payload/$(basename "$APP")"
           (
             cd build
-            /usr/bin/zip -qry MinecraftVSZombies2-0.7.2-iOS-unsigned.ipa Payload
+            /usr/bin/zip -qry MinecraftVSZombies2-0.7.3-iOS-unsigned.ipa Payload
           )
-          /usr/bin/unzip -l build/MinecraftVSZombies2-0.7.2-iOS-unsigned.ipa | head -80
+          /usr/bin/unzip -l build/MinecraftVSZombies2-0.7.3-iOS-unsigned.ipa | head -80
 
       - name: Upload unsigned IPA
         if: steps.unity_export.outcome == 'success'
         uses: actions/upload-artifact@v4
         with:
-          name: MinecraftVSZombies2-0.7.2-iOS-unsigned
-          path: build/MinecraftVSZombies2-0.7.2-iOS-unsigned.ipa
+          name: MinecraftVSZombies2-0.7.3-iOS-unsigned
+          path: build/MinecraftVSZombies2-0.7.3-iOS-unsigned.ipa
           if-no-files-found: error
           compression-level: 0
 

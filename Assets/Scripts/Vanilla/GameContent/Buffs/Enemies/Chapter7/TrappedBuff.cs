@@ -20,5 +20,13 @@ namespace MVZ2.GameContent.Buffs.Enemies
             AddModifier(new Vector3Modifier(EngineEntityProps.MODEL_POSITION_OFFSET, NumberOperator.Set, new Vector3(0, 0, 0.1f)));
             AddModifier(new BooleanModifier(LogicEnemyProps.FORCED_MOVEMENT, true));
         }
+        public override void PostUpdate(Buff buff)
+        {
+            base.PostUpdate(buff);
+            var ent = buff.GetEntity();
+            if (!ent.ExistsAndAlive())
+                return;
+            ent.StopMonsterMotionBuffs();
+        }
     }
 }

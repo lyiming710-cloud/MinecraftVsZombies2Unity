@@ -255,6 +255,8 @@ namespace MVZ2.GameContent.Buffs
 
             // Core
             public const string randomEnemySpeed = "random_enemy_speed";
+            public const string beingRiden = "being_riden";
+            public const string ridingPassenger = "riding_passenger";
 
             // Curses
             public const string theGiantsFleshForEnemy = "the_giants_flesh_for_enemy";
@@ -639,6 +641,8 @@ namespace MVZ2.GameContent.Buffs
 
             // Core
             public static readonly NamespaceID randomEnemySpeed = Get(VanillaBuffNames.Enemy.randomEnemySpeed);
+            public static readonly NamespaceID beingRiden = Get(VanillaBuffNames.Enemy.beingRiden);
+            public static readonly NamespaceID ridingPassenger = Get(VanillaBuffNames.Enemy.ridingPassenger);
 
             // Prologue
             public static readonly NamespaceID gemCarrier = Get(VanillaBuffNames.Enemy.gemCarrier);

@@ -22,8 +22,8 @@ namespace MVZ2.Editor
             // trackpads/mice remain distinguishable from direct finger touches.
             plist.root.SetBoolean("UIApplicationSupportsIndirectInputEvents", true);
             // Preserve the exact marketing/build versions in the generated iOS app.
-            plist.root.SetString("CFBundleShortVersionString", "0.7.2");
-            plist.root.SetString("CFBundleVersion", "702");
+            plist.root.SetString("CFBundleShortVersionString", "0.7.3");
+            plist.root.SetString("CFBundleVersion", "703");
 
             plist.WriteToFile(plistPath);
         }
