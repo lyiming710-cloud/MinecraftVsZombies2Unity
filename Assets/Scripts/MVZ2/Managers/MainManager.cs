@@ -145,7 +145,7 @@ namespace MVZ2.Managers
                 throw new DuplicateInstanceException(name);
             }
         }
-#if UNITY_ANDROID
+#if UNITY_ANDROID || UNITY_IOS
         private void OnApplicationFocus(bool focus)
         {
             // 安卓切换到其他应用时，可能会在后台被系统释放，而不调用OnApplicationQuit.
@@ -153,6 +153,14 @@ namespace MVZ2.Managers
             {
                 SaveManager.SaveToFile(); // 安卓切换后台后，保存。
             }
+        }
+#endif
+#if UNITY_IOS
+        private void OnApplicationPause(bool pause)
+        {
+            // Persist progress before iOS suspends the application.
+            if (pause)
+                SaveManager.SaveToFile();
         }
 #endif
 

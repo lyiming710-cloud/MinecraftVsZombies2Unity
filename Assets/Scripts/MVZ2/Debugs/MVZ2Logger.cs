@@ -98,6 +98,16 @@ namespace MVZ2.Debugs
                 StartLogWriter();
             }
         }
+#if UNITY_IOS
+        private void OnApplicationPause(bool pause)
+        {
+            // iOS can suspend the app without OnApplicationQuit.
+            if (pause)
+                CloseLogWriter();
+            else
+                StartLogWriter();
+        }
+#endif
 #endif
         private void OnApplicationQuit()
         {
