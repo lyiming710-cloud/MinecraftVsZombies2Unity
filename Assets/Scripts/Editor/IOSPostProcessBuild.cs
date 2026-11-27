@@ -1,4 +1,5 @@
 #if UNITY_IOS
+using System;
 using System.IO;
 using UnityEditor;
 using UnityEditor.Callbacks;
@@ -21,9 +22,20 @@ namespace MVZ2.Editor
             // Opt out of iPadOS compatibility-mode pointer translation so
             // trackpads/mice remain distinguishable from direct finger touches.
             plist.root.SetBoolean("UIApplicationSupportsIndirectInputEvents", true);
-            // Preserve the exact marketing/build versions in the generated iOS app.
-            plist.root.SetString("CFBundleShortVersionString", "0.7.3");
-            plist.root.SetString("CFBundleVersion", "703");
+
+            // Preserve the resolved marketing/build versions without hardcoding them.
+            var shortVersion = Environment.GetEnvironmentVariable("MVZ2_APP_VERSION");
+            if (string.IsNullOrWhiteSpace(shortVersion))
+                shortVersion = PlayerSettings.bundleVersion;
+
+            var buildVersion = Environment.GetEnvironmentVariable("MVZ2_BUILD_NUMBER");
+            if (string.IsNullOrWhiteSpace(buildVersion))
+                buildVersion = PlayerSettings.iOS.buildNumber;
+
+            if (!string.IsNullOrWhiteSpace(shortVersion))
+                plist.root.SetString("CFBundleShortVersionString", shortVersion.Trim());
+            if (!string.IsNullOrWhiteSpace(buildVersion))
+                plist.root.SetString("CFBundleVersion", buildVersion.Trim());
 
             plist.WriteToFile(plistPath);
         }
