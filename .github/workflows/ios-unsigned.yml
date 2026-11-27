@@ -227,31 +227,44 @@ jobs:
           path: /Applications/Unity/Hub/Editor/${{ steps.meta.outputs.unity_version }}
           key: UnityEditor-macOS-arm64-iOS-${{ steps.meta.outputs.unity_version }}
 
-      - name: Pre-install Unity Hub and Unity Editor for iOS
+      - name: Pre-install Unity CLI and Unity Editor for iOS
         shell: bash
         env:
           UNITY_VERSION: ${{ steps.meta.outputs.unity_version }}
           UNITY_CHANGESET: ${{ steps.meta.outputs.unity_changeset }}
         run: |
           set -euo pipefail
-          HUB_BIN="/Applications/Unity Hub.app/Contents/MacOS/Unity Hub"
-          EDITOR_BIN="/Applications/Unity/Hub/Editor/${UNITY_VERSION}/Unity.app/Contents/MacOS/Unity"
+          EDITOR_DIR="/Applications/Unity/Hub/Editor/${UNITY_VERSION}"
+          EDITOR_BIN="${EDITOR_DIR}/Unity.app/Contents/MacOS/Unity"
 
-          if [[ ! -x "$HUB_BIN" ]]; then
-            echo "Installing Unity Hub via Homebrew cask..."
-            brew install --cask unity-hub || brew reinstall --cask unity-hub
+          if ! command -v unity >/dev/null 2>&1; then
+            echo "Installing Unity CLI via Homebrew cask..."
+            brew install --cask unity-cli || {
+              curl -fsSL https://unity.com/install.sh | bash
+              export PATH="$HOME/.local/bin:$PATH"
+            }
+          fi
+          unity --version
+
+          if [[ ! -x "$EDITOR_BIN" ]]; then
+            echo "Installing Unity ${UNITY_VERSION} (changeset ${UNITY_CHANGESET}) with iOS module via Unity CLI..."
+            INSTALL_ARGS=("$UNITY_VERSION" -m ios -a arm64 --cm)
+            if [[ -n "$UNITY_CHANGESET" ]]; then
+              INSTALL_ARGS+=(-c "$UNITY_CHANGESET")
+            fi
+            unity install "${INSTALL_ARGS[@]}"
+          else
+            echo "Unity Editor already present at $EDITOR_BIN"
+            unity install-modules -e "$UNITY_VERSION" -m ios --cm || true
           fi
 
           if [[ ! -x "$EDITOR_BIN" ]]; then
-            echo "Installing Unity ${UNITY_VERSION} (changeset ${UNITY_CHANGESET}) with iOS module..."
-            INSTALL_ARGS=(-- --headless install --version "$UNITY_VERSION" --module ios --architecture arm64 --childModules)
-            if [[ -n "$UNITY_CHANGESET" ]]; then
-              INSTALL_ARGS+=(--changeset "$UNITY_CHANGESET")
+            FOUND_BIN="$(find /Applications "$HOME" -maxdepth 6 -path "*/${UNITY_VERSION}/Unity.app/Contents/MacOS/Unity" -type f -print -quit 2>/dev/null || true)"
+            if [[ -n "$FOUND_BIN" ]]; then
+              FOUND_DIR="$(dirname "$(dirname "$(dirname "$(dirname "$FOUND_BIN")")")")"
+              mkdir -p /Applications/Unity/Hub/Editor
+              ln -sfn "$FOUND_DIR" "$EDITOR_DIR"
             fi
-            "$HUB_BIN" "${INSTALL_ARGS[@]}"
-          else
-            echo "Unity Editor already present at $EDITOR_BIN"
-            "$HUB_BIN" -- --headless install-modules --version "$UNITY_VERSION" --module ios --childModules || true
           fi
 
           test -x "$EDITOR_BIN"
