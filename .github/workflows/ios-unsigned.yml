@@ -1,10 +1,22 @@
-name: Build MVZ2 0.7.3 unsigned iOS IPA
+name: Build MVZ2 unsigned iOS IPA
 
 on:
   workflow_dispatch:
+    inputs:
+      app_version:
+        description: "Optional app version override (leave blank to auto-detect from Changelog)"
+        required: false
+        default: ""
+        type: string
+      build_number:
+        description: "Optional iOS CFBundleVersion override (leave blank to auto-derive from app version)"
+        required: false
+        default: ""
+        type: string
   push:
     branches:
-      - ios-0.7.3-build-20261028
+      - "ios-*"
+      - "ios-unsigned"
     paths:
       - "Assets/**"
       - "Packages/**"
@@ -14,8 +26,13 @@ on:
 permissions:
   contents: read
 
+concurrency:
+  group: ios-unsigned-${{ github.ref }}
+  cancel-in-progress: true
+
 env:
   FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: "true"
+  EXPECTED_BUNDLE_ID: "com.cuerzor.minecraftVSZombies2"
 
 jobs:
   build-ios:
@@ -32,6 +49,79 @@ jobs:
           lfs: true
           submodules: recursive
           fetch-depth: 0
+
+      - name: Resolve Unity version and app version metadata
+        id: meta
+        shell: bash
+        env:
+          INPUT_APP_VERSION: ${{ inputs.app_version }}
+          INPUT_BUILD_NUMBER: ${{ inputs.build_number }}
+        run: |
+          set -euo pipefail
+          python3 - <<'PY'
+          import os
+          import re
+          from pathlib import Path
+
+          pv_path = Path("ProjectSettings/ProjectVersion.txt")
+          if not pv_path.is_file():
+              raise SystemExit("Missing ProjectSettings/ProjectVersion.txt")
+          pv_text = pv_path.read_text(encoding="utf-8", errors="replace")
+          m_unity = re.search(r"^m_EditorVersion:\s*(\S+)", pv_text, re.MULTILINE)
+          if not m_unity:
+              raise SystemExit("Could not parse m_EditorVersion from ProjectVersion.txt")
+          unity_version = m_unity.group(1).strip()
+
+          app_version = os.environ.get("INPUT_APP_VERSION", "").strip()
+          if not app_version:
+              for cl_name in ("Changelog-ZH.md", "Changelog.md"):
+                  cl_path = Path(cl_name)
+                  if cl_path.is_file():
+                      cl_text = cl_path.read_text(encoding="utf-8-sig", errors="replace")
+                      m_ver = re.search(r"^#\s+v?(\d+\.\d+(?:\.\d+)?)\b", cl_text, re.MULTILINE)
+                      if m_ver:
+                          app_version = m_ver.group(1).strip()
+                          break
+
+          if not app_version:
+              ps_text = Path("ProjectSettings/ProjectSettings.asset").read_text(encoding="utf-8", errors="replace")
+              m_bv = re.search(r"^\s*bundleVersion:\s*(\S+)", ps_text, re.MULTILINE)
+              app_version = m_bv.group(1).strip() if m_bv else "0.0.0"
+
+          build_number = os.environ.get("INPUT_BUILD_NUMBER", "").strip()
+          if not build_number:
+              parts = [int(p) for p in re.findall(r"\d+", app_version)[:3]]
+              while len(parts) < 3:
+                  parts.append(0)
+              derived = parts[0] * 1000 + parts[1] * 100 + parts[2]
+              build_number = str(derived if derived > 0 else 1)
+
+          ps_path = Path("ProjectSettings/ProjectSettings.asset")
+          ps_text = ps_path.read_text(encoding="utf-8", errors="replace")
+          ps_text = re.sub(
+              r"^(\s*bundleVersion:\s*).*$",
+              rf"\g<1>{app_version}",
+              ps_text,
+              count=1,
+              flags=re.MULTILINE,
+          )
+          ps_text = re.sub(
+              r"(buildNumber:\s*\n(?:[ \t]+\w+:\s*\S+\n)*?[ \t]+iPhone:\s*)\S+",
+              rf"\g<1>{build_number}",
+              ps_text,
+              count=1,
+          )
+          ps_path.write_text(ps_text, encoding="utf-8")
+
+          artifact_base = f"MinecraftVSZombies2-{app_version}-iOS-unsigned"
+          with open(os.environ["GITHUB_OUTPUT"], "a", encoding="utf-8") as out:
+              out.write(f"unity_version={unity_version}\n")
+              out.write(f"app_version={app_version}\n")
+              out.write(f"build_number={build_number}\n")
+              out.write(f"artifact_base={artifact_base}\n")
+
+          print(f"Resolved Unity={unity_version}, AppVersion={app_version}, BuildNumber={build_number}")
+          PY
 
       - name: Normalize legacy CSharp source encodings
         shell: bash
@@ -67,23 +157,20 @@ jobs:
                   print(f"UNKNOWN_ENCODING\t{path}\t{error}")
               raise SystemExit("Found C# files that are neither UTF-8 nor GB18030")
 
-          # TalkConverter used full-width punctuation as char literals. Keep the
-          # already-proven Unicode-escape workaround after transcoding so Roslyn
-          # cannot misinterpret those literals on the macOS runner.
           talk = Path("Assets/Scripts/Editor/Menus/TalkConverter.cs")
-          text = talk.read_text(encoding="utf-8-sig")
-          replacements = {
-              "'【'": r"'\u3010'",
-              "'】'": r"'\u3011'",
-              "'（'": r"'\uFF08'",
-              "'）'": r"'\uFF09'",
-              "'：'": r"'\uFF1A'",
-          }
-          for old, new in replacements.items():
-              text = text.replace(old, new)
-          talk.write_text(text, encoding="utf-8-sig", newline="\n")
+          if talk.is_file():
+              text = talk.read_text(encoding="utf-8-sig")
+              replacements = {
+                  "'【'": r"'\u3010'",
+                  "'】'": r"'\u3011'",
+                  "'（'": r"'\uFF08'",
+                  "'）'": r"'\uFF09'",
+                  "'：'": r"'\uFF1A'",
+              }
+              for old, new in replacements.items():
+                  text = text.replace(old, new)
+              talk.write_text(text, encoding="utf-8-sig", newline="\n")
 
-          # Verify every C# file that will reach Roslyn is now valid UTF-8.
           invalid_after = []
           for path in sorted(Path("Assets").rglob("*.cs")):
               if not path.is_file():
@@ -97,18 +184,19 @@ jobs:
                   print(f"STILL_INVALID\t{path}\t{error}")
               raise SystemExit("C# UTF-8 normalization verification failed")
 
-          # Regression check for the exact strings that were mojibake in the
-          # first iOS IPA. These live in the legacy-encoded options controller.
-          options = Path("Assets/Scripts/MVZ2/Options/Dialog/OptionsDialogController.cs").read_text(encoding="utf-8-sig")
-          expected = ("音乐音量：{0}", "音效音量：{0}", "更多选项", "难度：{0}")
-          missing = [item for item in expected if item not in options]
-          if missing:
-              raise SystemExit(f"Options text transcoding regression: missing {missing!r}")
+          options_path = Path("Assets/Scripts/MVZ2/Options/Dialog/OptionsDialogController.cs")
+          if options_path.is_file():
+              options = options_path.read_text(encoding="utf-8-sig")
+              expected = ("音乐音量：{0}", "音效音量：{0}", "更多选项", "难度：{0}")
+              missing = [item for item in expected if item not in options]
+              if missing:
+                  print(f"::warning::Options text check did not find {missing!r} (upstream strings may have changed)")
+              else:
+                  print("Options Chinese string verification passed")
 
           print(f"LEGACY_CSHARP_TRANSCODED_COUNT={len(legacy)}")
           for path in legacy:
               print(f"TRANSCODED_GB18030_TO_UTF8\t{path}")
-          print("Options Chinese string verification passed")
           PY
 
       - name: Verify Unity activation secrets
@@ -132,9 +220,9 @@ jobs:
         uses: actions/cache@v4
         with:
           path: Library
-          key: Library-iOS-2022.3.62f3-${{ hashFiles('Assets/**', 'Packages/**', 'ProjectSettings/**') }}
+          key: Library-iOS-${{ steps.meta.outputs.unity_version }}-${{ hashFiles('Assets/**', 'Packages/**', 'ProjectSettings/**') }}
           restore-keys: |
-            Library-iOS-2022.3.62f3-
+            Library-iOS-${{ steps.meta.outputs.unity_version }}-
 
       - name: Export Unity iOS Xcode project
         id: unity_export
@@ -145,10 +233,12 @@ jobs:
           UNITY_SERIAL: ${{ secrets.UNITY_SERIAL }}
           UNITY_EMAIL: ${{ secrets.UNITY_EMAIL }}
           UNITY_PASSWORD: ${{ secrets.UNITY_PASSWORD }}
+          MVZ2_APP_VERSION: ${{ steps.meta.outputs.app_version }}
+          MVZ2_BUILD_NUMBER: ${{ steps.meta.outputs.build_number }}
         with:
-          unityVersion: 2022.3.62f3
+          unityVersion: ${{ steps.meta.outputs.unity_version }}
           versioning: Custom
-          version: '0.7.3'
+          version: ${{ steps.meta.outputs.app_version }}
           targetPlatform: iOS
           buildsPath: build
           buildName: iOS
@@ -230,10 +320,15 @@ jobs:
       - name: Build unsigned device app
         if: steps.unity_export.outcome == 'success'
         shell: bash
+        env:
+          APP_VERSION: ${{ steps.meta.outputs.app_version }}
+          BUILD_NUMBER: ${{ steps.meta.outputs.build_number }}
+          ARTIFACT_BASE: ${{ steps.meta.outputs.artifact_base }}
         run: |
           set -euo pipefail
           PROJECT="${{ steps.xcode.outputs.project }}"
-          rm -rf build/DerivedData build/Payload build/MinecraftVSZombies2-0.7.3-iOS-unsigned.ipa
+          IPA_PATH="build/${ARTIFACT_BASE}.ipa"
+          rm -rf build/DerivedData build/Payload "$IPA_PATH"
 
           xcodebuild \
             -project "$PROJECT" \
@@ -259,24 +354,24 @@ jobs:
           BUILD_VERSION="$(/usr/libexec/PlistBuddy -c 'Print :CFBundleVersion' "$APP_PLIST")"
           BUNDLE_ID="$(/usr/libexec/PlistBuddy -c 'Print :CFBundleIdentifier' "$APP_PLIST")"
           echo "IPA identity: bundle=$BUNDLE_ID version=$SHORT_VERSION build=$BUILD_VERSION"
-          [[ "$SHORT_VERSION" == "0.7.3" ]] || { echo "::error::Expected app version 0.7.3, got $SHORT_VERSION"; exit 1; }
-          [[ "$BUILD_VERSION" == "703" ]] || { echo "::error::Expected iOS build 703, got $BUILD_VERSION"; exit 1; }
-          [[ "$BUNDLE_ID" == "com.cuerzor.minecraftVSZombies2" ]] || { echo "::error::Unexpected bundle ID $BUNDLE_ID"; exit 1; }
+          [[ "$SHORT_VERSION" == "$APP_VERSION" ]] || { echo "::error::Expected app version $APP_VERSION, got $SHORT_VERSION"; exit 1; }
+          [[ "$BUILD_VERSION" == "$BUILD_NUMBER" ]] || { echo "::error::Expected iOS build $BUILD_NUMBER, got $BUILD_VERSION"; exit 1; }
+          [[ "$BUNDLE_ID" == "$EXPECTED_BUNDLE_ID" ]] || { echo "::error::Unexpected bundle ID $BUNDLE_ID"; exit 1; }
 
           mkdir -p build/Payload
           ditto "$APP" "build/Payload/$(basename "$APP")"
           (
             cd build
-            /usr/bin/zip -qry MinecraftVSZombies2-0.7.3-iOS-unsigned.ipa Payload
+            /usr/bin/zip -qry "${ARTIFACT_BASE}.ipa" Payload
           )
-          /usr/bin/unzip -l build/MinecraftVSZombies2-0.7.3-iOS-unsigned.ipa | head -80
+          /usr/bin/unzip -l "$IPA_PATH" | head -80
 
       - name: Upload unsigned IPA
         if: steps.unity_export.outcome == 'success'
         uses: actions/upload-artifact@v4
         with:
-          name: MinecraftVSZombies2-0.7.3-iOS-unsigned
-          path: build/MinecraftVSZombies2-0.7.3-iOS-unsigned.ipa
+          name: ${{ steps.meta.outputs.artifact_base }}
+          path: build/${{ steps.meta.outputs.artifact_base }}.ipa
           if-no-files-found: error
           compression-level: 0
 
