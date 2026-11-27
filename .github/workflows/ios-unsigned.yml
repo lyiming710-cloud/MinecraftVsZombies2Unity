@@ -37,7 +37,7 @@ env:
 jobs:
   build-ios:
     name: Unity iOS -> unsigned IPA
-    runs-on: macos-14
+    runs-on: macos-15
     timeout-minutes: 120
     outputs:
       unity_error_summary: ${{ steps.unity_error.outputs.summary }}
